@@ -1,0 +1,25 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "check": "node --check server.js && node --check app.js && node --check config/env.js && node --check config/db.js && node --check controllers/healthController.js && node --check routes/healthRoutes.js && node --check middleware/notFound.js && node --check middleware/errorHandler.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "AI Document Analyzer backend",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "mongoose": "^9.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  },
+  "type": "module",
+  "private": true
+}
