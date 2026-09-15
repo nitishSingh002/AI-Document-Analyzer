@@ -1,5 +1,19 @@
 # AI Document Analyzer API
 
+## AI document analysis
+
+Set `GEMINI_API_KEY` in `server/.env` and restart the backend. The key is read only on the server; never use a `VITE_` variable for it. Optional `GEMINI_MODEL` defaults to `gemini-2.5-flash`; overrides must support generateContent and structured JSON output. PDF uploads still work without an Gemini key.
+
+`POST /api/documents/:id/analyze` requires no request body. It reads the existing document text, calls Gemini, and saves the validated analysis to MongoDB. It never uploads the PDF again. HTTP 200 returns `{ "id": "...", "analysis": { "summary": "...", "keyPoints": ["..."], "documentType": "report", "entities": ["..."], "analyzedAt": "..." } }`.
+
+Flow: `documentRoutes` → `documentController` → `documentService` → `aiService` → Gemini → MongoDB update. `services/aiService.js` uses the official `@google/genai` SDK's `models.generateContent()` with `responseMimeType: application/json` and `responseJsonSchema` generated using Zod 4's `z.toJSONSchema()` to request exactly four fields, including 5–8 key points. The server supplies `analyzedAt` after successful analysis. See [Gemini Structured Outputs documentation](https://ai.google.dev/gemini-api/docs/generate-content/structured-output).
+
+The complete extracted text is sent as document data with instructions to ignore embedded commands. Requests use a 90-second SDK timeout, one attempt (no retries), and at most 8,192 output tokens, including any thinking tokens. The schema-constrained JSON response is decoded with `JSON.parse` and validated with the existing strict Zod schema. No markdown stripping or arbitrary-text recovery is used. Blocked, missing, and incomplete candidates are rejected before saving. Text is not silently truncated: context-limit errors return 422. This version does not split long documents into multiple requests. Reanalysis replaces saved analysis only after a complete valid response; a failed attempt leaves previous analysis intact.
+
+Errors return the existing JSON error envelope: 400 for invalid IDs, 404 for missing/deleted documents, 422 for empty text or context limits, 503 for missing server configuration or database errors, and 502 for Gemini failures, refusals, incomplete responses, or invalid output. Provider details and credentials are not returned to the browser.
+
+`tests/documentAnalysis.test.js` covers endpoint success, request schema, Gemini schema configuration and Zod validation, and the error paths using mocked Gemini calls and database operations. `npm test` does not incur Gemini charges or write to MongoDB. A live smoke test requires configured Gemini and MongoDB credentials: upload a text-based PDF and click **Analyze Document** on the Dashboard.
+
 Node.js and Express backend using JavaScript ES modules and Mongoose.
 
 ## Run locally

@@ -37,6 +37,8 @@ button.button:disabled { opacity: 0.6; cursor: not-allowed; }
 button:focus-visible, input:focus-visible { outline: 3px solid #3158c9; outline-offset: 5px; }
 .file-name { overflow-wrap: anywhere; }
 .upload-error { color: #b42318; }
+.analysis-result { margin-top: 28px; overflow-wrap: anywhere; }
+.analysis-result li { margin-bottom: 8px; line-height: 1.7; }
 .text-preview { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.7; background: #f6f8fb; padding: 20px; border-radius: 8px; }
 @media (max-width: 540px) {
   .navigation { align-items: flex-start; flex-direction: column; gap: 16px; }

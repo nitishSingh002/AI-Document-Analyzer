@@ -12,4 +12,6 @@ export const env = {
   port,
   mongodbUri: process.env.MONGODB_URI?.trim() || '',
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
+  geminiApiKey: process.env.GEMINI_API_KEY?.trim() || '',
+  geminiModel: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
 }

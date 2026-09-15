@@ -11,6 +11,12 @@ npm run dev
 
 On Windows, use `npm.cmd` if PowerShell blocks `npm.ps1`.
 
+## Document analysis
+
+After uploading a PDF, click **Analyze Document** to analyze its saved text. The Dashboard calls `POST /documents/:id/analyze` through the existing Axios instance and `VITE_API_BASE_URL`. It shows a loading state and errors, then AI Summary, Key Points, Document Type, and Important Entities alongside the extracted-text preview. File selection and upload are disabled during analysis to keep the result attached to the current document. The request timeout is 120 seconds.
+
+Configure `GEMINI_API_KEY` only in the backend environment and restart the backend. No Gemini package or API key is used in the frontend. Analysis is persisted in MongoDB; this Dashboard currently displays documents uploaded in the current page session.
+
 ## Checks
 
 ```sh
