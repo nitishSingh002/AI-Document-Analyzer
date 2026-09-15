@@ -1,4 +1,4 @@
-# AI Document Analyzer — Frontend
+# AI Document Analyzer â€” Frontend
 
 React + Vite + JavaScript frontend with React Router and Axios.
 
@@ -23,12 +23,14 @@ npm run preview
 
 - `src/components/Navbar.jsx`: shared navigation.
 - `src/pages/Home.jsx`: landing page at `/`.
-- `src/pages/Dashboard.jsx`: placeholder workspace at `/dashboard`.
+- `src/pages/Dashboard.jsx`: PDF selection, validation, Axios upload, loading/errors, and saved document preview at `/dashboard`.
 - `src/services/api.js`: shared Axios instance with a 10-second timeout.
 - `src/App.jsx`: application layout and routes, including a fallback page.
 - `src/main.jsx`: React entry point and browser router.
 - `src/index.css`: shared responsive styles.
 
-Optionally copy `.env.example` to `.env.local` and set `VITE_API_BASE_URL` for a future API. It defaults to `/api`. Vite environment variables are public; do not put secrets in them. No API requests are made by the current pages.
+Optionally copy `.env.example` to `.env.local` and set `VITE_API_BASE_URL` (for example, `http://localhost:5000/api`). It defaults to `/api`; the Vite development server proxies `/api` to `http://localhost:5000`. If the backend uses another port, set the base URL accordingly. Vite environment variables are public; do not put secrets in them.
 
-For production hosting, configure an SPA fallback to `index.html` so direct visits to `/dashboard` work.
+Run the backend with MongoDB configured, open `/dashboard`, choose a PDF up to 10 MB, and click **Upload PDF**. The upload uses multipart field `file` and a 120-second request timeout. Success displays the original filename, local upload date, and the first 1,000 extracted characters. Scanned/image-only and password-protected PDFs are unsupported.
+
+For production hosting, configure an SPA fallback to `index.html` so direct visits to `/dashboard` work. Proxy `/api` to the backend or build with an explicit `VITE_API_BASE_URL`; the development proxy is not included in the production build. Set backend `CLIENT_URL` to the frontend origin for cross-origin requests.

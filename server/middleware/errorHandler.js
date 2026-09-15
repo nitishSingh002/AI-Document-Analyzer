@@ -8,7 +8,7 @@ export function errorHandler(error, req, res, next) {
 
   if (status >= 500) console.error('Request failed:', error.message)
 
-  const message = status >= 500
+  const message = status >= 500 && !error.expose
     ? 'Internal server error'
     : error.type === 'entity.parse.failed'
       ? 'Invalid JSON request body'

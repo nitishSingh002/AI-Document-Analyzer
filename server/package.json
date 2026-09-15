@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "check": "node --check server.js && node --check app.js && node --check config/env.js && node --check config/db.js && node --check controllers/healthController.js && node --check routes/healthRoutes.js && node --check middleware/notFound.js && node --check middleware/errorHandler.js"
+    "check": "node scripts/check.js",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
@@ -15,7 +16,9 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "mongoose": "^9.10.0"
+    "mongoose": "^9.10.0",
+    "multer": "^2.4.0",
+    "pdf-parse": "^2.4.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
