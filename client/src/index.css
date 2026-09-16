@@ -38,6 +38,12 @@ button:focus-visible, input:focus-visible { outline: 3px solid #3158c9; outline-
 .file-name { overflow-wrap: anywhere; }
 .upload-error { color: #b42318; }
 .analysis-result { margin-top: 28px; overflow-wrap: anywhere; }
+.document-chat { margin-top: 28px; overflow-wrap: anywhere; }
+.document-chat label { display: block; margin-bottom: 12px; font-weight: 600; }
+.document-chat textarea { display: block; width: 100%; padding: 12px; margin-bottom: 8px; border: 1px solid #aab4c5; border-radius: 6px; font: inherit; resize: vertical; }
+.document-chat textarea:focus-visible { outline: 3px solid #3158c9; outline-offset: 3px; }
+.chat-answer { white-space: pre-wrap; }
+.chat-sources { padding-left: 20px; font-size: 0.875rem; }
 .analysis-result li { margin-bottom: 8px; line-height: 1.7; }
 .text-preview { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.7; background: #f6f8fb; padding: 20px; border-radius: 8px; }
 @media (max-width: 540px) {

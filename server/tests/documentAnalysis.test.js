@@ -59,7 +59,7 @@ test('analyzes stored text with strict Structured Outputs and saves validated an
   assert.equal(request.config.responseJsonSchema.additionalProperties, false)
   assert.deepEqual(Object.keys(request.config.responseJsonSchema.properties).sort(), Object.keys(result).sort())
   assert.deepEqual(request.config.responseJsonSchema.required.sort(), Object.keys(result).sort())
-  assert.deepEqual(updateMock.mock.calls[0].arguments[2], { new: true, runValidators: true })
+  assert.deepEqual(updateMock.mock.calls[0].arguments[2], { returnDocument: 'after', runValidators: true })
   assert.equal(response.body.extractedText, undefined)
   assert.ok(!JSON.stringify(response.body).includes(env.geminiApiKey))
 })
@@ -111,15 +111,11 @@ test('Gemini diagnostics include useful fields, redact keys, and keep the fronte
   const response = await analyze()
   assert.deepEqual(response.body, { status: 'error', message: 'AI analysis failed. Please try again later.' })
   assert.equal(response.status, 502)
-  const diagnostic = logs.mock.calls.find(call => call.arguments[0] === 'Gemini analysis request failed:').arguments[1]
-  assert.equal(diagnostic.name, 'AuthenticationError')
-  assert.equal(diagnostic.status, 401)
-  assert.equal(diagnostic.code, 'invalid_api_key')
-  assert.equal(diagnostic.type, 'invalid_request_error')
-  assert.equal(diagnostic.model, env.geminiModel)
-  assert.match(diagnostic.message, /Incorrect API key/)
-  const serialized = JSON.stringify(logs.mock.calls.map(call => call.arguments))
-  for (const secret of [env.geminiApiKey, 'AIza-partial', 'another-secret', 'header-secret']) {
+  const diagnostic = info.mock.calls.find(call => call.arguments[0] === 'Gemini request:').arguments[1]
+  assert.deepEqual(diagnostic, { model: env.geminiModel, retryNumber: 0, status: 401, fallbackUsed: false })
+  assert.equal(parseMock.mock.callCount(), 1)
+  const serialized = JSON.stringify([...logs.mock.calls, ...info.mock.calls].map(call => call.arguments))
+  for (const secret of [env.geminiApiKey, 'AIza-partial', 'another-secret', 'header-secret', 'Incorrect API key']) {
     assert.ok(!serialized.includes(secret))
   }
   assert.deepEqual(info.mock.calls[0].arguments[1], { apiKeyLoaded: true, model: env.geminiModel })

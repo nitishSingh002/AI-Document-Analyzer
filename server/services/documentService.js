@@ -2,7 +2,29 @@ import { randomUUID } from 'node:crypto'
 import { PDFParse } from 'pdf-parse'
 import Document from '../models/Document.js'
 import { HttpError } from '../utils/HttpError.js'
-import { analyzeText } from './aiService.js'
+import { analyzeText, answerQuestion } from './aiService.js'
+import { retrieveContext } from './retrievalService.js'
+
+export async function askDocument(id, question) {
+  if (!/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, 'Invalid document ID.')
+  if (typeof question !== 'string' || !question.trim()) throw new HttpError(400, 'Question must be a non-empty string.')
+  if (question.length > 2000) throw new HttpError(400, 'Question must be 2000 characters or fewer.')
+  let document
+  try {
+    document = await Document.findById(id)
+  } catch {
+    throw new HttpError(503, 'Unable to load the document. Please try again.')
+  }
+  if (!document) throw new HttpError(404, 'Document not found.')
+  if (!document.extractedText?.trim()) throw new HttpError(422, 'This document has no extracted text to answer questions.')
+  const chunks = retrieveContext(document.extractedText, question.trim())
+  if (!chunks.length) return { answer: 'This information is not available in the document.', sources: [] }
+  const answer = await answerQuestion(question.trim(), chunks)
+  return {
+    answer,
+    sources: chunks.map(({ chunkIndex, text }) => ({ chunkIndex, preview: text.slice(0, 300) })),
+  }
+}
 
 export async function analyzeDocument(id) {
   if (!/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, 'Invalid document ID.')
@@ -20,7 +42,7 @@ export async function analyzeDocument(id) {
   try {
     updated = await Document.findByIdAndUpdate(id, {
       $set: { analysis: { ...result, analyzedAt: new Date() } },
-    }, { new: true, runValidators: true })
+    }, { returnDocument: 'after', runValidators: true })
   } catch (error) {
     throw new HttpError(503, 'Unable to save the analysis. Please try again.', { cause: error })
   }

@@ -1,4 +1,8 @@
-import { createDocument, analyzeDocument } from '../services/documentService.js'
+import { createDocument, analyzeDocument, askDocument } from '../services/documentService.js'
+
+export async function askUploadedDocument(req, res) {
+  res.json(await askDocument(req.params.id, req.body?.question))
+}
 
 export async function analyzeUploadedDocument(req, res) {
   const document = await analyzeDocument(req.params.id)

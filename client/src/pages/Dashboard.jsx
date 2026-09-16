@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import api from '../services/api'
+import DocumentChat from '../components/DocumentChat'
 
 export default function Dashboard() {
   const [file, setFile] = useState(null)
@@ -106,6 +107,7 @@ export default function Dashboard() {
           )}
         </section>
       )}
+      {document && <DocumentChat key={document.id} documentId={document.id} />}
     </section>
   )
 }
