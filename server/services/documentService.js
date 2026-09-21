@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import { PDFParse } from 'pdf-parse'
 import Document from '../models/Document.js'
 import { HttpError } from '../utils/HttpError.js'
@@ -7,7 +8,7 @@ import { retrieveContext } from './retrievalService.js'
 
 export async function listDocuments(owner) {
   try {
-    return await Document.find({ owner }, 'originalName size createdAt analysis.documentType')
+    return await Document.find({ owner }, 'originalName displayName size createdAt analysis.documentType')
       .sort({ createdAt: -1, _id: -1 }).lean()
   } catch (error) {
     throw new HttpError(503, 'Unable to load document history. Please try again.', { cause: error })
@@ -21,6 +22,35 @@ export async function getDocument(id, owner) {
     document = await Document.findOne({ _id: id, owner })
   } catch (error) {
     throw new HttpError(503, 'Unable to load the document. Please try again.', { cause: error })
+  }
+  if (!document) throw new HttpError(404, 'Document not found.')
+  return document
+}
+
+export async function deleteDocument(id, owner) {
+  if (typeof id !== 'string' || !/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, 'Invalid document ID.')
+  let result
+  try {
+    result = await Document.deleteOne({ _id: id, owner })
+  } catch (error) {
+    throw new HttpError(503, 'Unable to delete the document. Please try again.', { cause: error })
+  }
+  if (!result.deletedCount) throw new HttpError(404, 'Document not found.')
+}
+
+const renameSchema = z.object({ name: z.string().trim().min(1).max(200) }).strict()
+
+export async function renameDocument(id, owner, body) {
+  if (typeof id !== 'string' || !/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, 'Invalid document ID.')
+  const parsed = renameSchema.safeParse(body)
+  if (!parsed.success) throw new HttpError(400, 'Provide a display name between 1 and 200 characters.')
+  let document
+  try {
+    document = await Document.findOneAndUpdate({ _id: id, owner },
+      { $set: { displayName: parsed.data.name } },
+      { returnDocument: 'after', runValidators: true, projection: { originalName: 1, displayName: 1 } })
+  } catch (error) {
+    throw new HttpError(503, 'Unable to rename the document. Please try again.', { cause: error })
   }
   if (!document) throw new HttpError(404, 'Document not found.')
   return document

@@ -15,6 +15,14 @@ All document routes require this cookie. Database reads and writes filter by aut
 
 Cookie options follow the [Express cookie API](https://expressjs.com/en/4x/api/response/#res.cookie). For command-line requests, log in with a cookie jar (`curl -c cookies.txt ...`) and send it with `curl -b cookies.txt ...` on document requests. Do not commit cookie jars.
 
+## Document management
+
+`DELETE /api/documents/:id` deletes the authenticated owner's complete document, including embedded analysis and chat history, and returns 204. `PATCH /api/documents/:id` accepts only `{ "name": "New display name" }` and returns `{ "id", "originalName", "displayName" }`. Names are trimmed and must contain 1–200 characters. Rename changes only `displayName`; original filename, extracted text, analysis, and chat remain unchanged. List and detail responses include `displayName` when set.
+
+Both operations return 400 for invalid IDs (or invalid rename bodies), 401 without authentication, 404 for missing, ownerless, or another user's documents, and 503 for database failures. Delete uses one owner-filtered database operation; there are no separate chat or analysis records to clean up.
+
+The Dashboard uses history/main/chat columns on large screens, a collapsible history panel above main/chat on tablets, and history/main/chat stacking on mobile. History offers Rename and Delete, with confirmation before deletion. Deleting the selected document clears its analysis and chat panels.
+
 ## Chat with a document
 
 `POST /api/documents/:id/ask` accepts `{ "question": "What was annual revenue?" }` and returns `{ "answer": "...", "sources": [{ "chunkIndex": 0, "preview": "..." }] }`. Questions must be non-empty strings of at most 2,000 characters. Chunk indexes are zero-based; previews contain at most 300 characters.
@@ -25,7 +33,7 @@ No matching keywords returns HTTP 200 with `This information is not available in
 
 Errors use the existing error envelope: 400 for invalid IDs/questions, 401 for missing/expired authentication, 404 for missing or inaccessible documents, 422 for missing extracted text, 503 for database/configuration failures, and 502 for Gemini failures or malformed/incomplete answers. Chat never logs provider errors, question text, or document context. `GEMINI_API_KEY` stays on the server. Successful question/answer pairs and source previews are appended atomically to the document's chat history; failed answers are not saved. `GET /api/documents/:id/chat` returns the owner's saved conversation.
 
-The Dashboard shows document history and analysis on the left and a scrollable chat panel on the right. Reopening a document restores its analysis and saved conversation. Existing upload and analysis features remain available. Tests cover authenticated endpoints, ownership isolation, validation, retrieval, provider failures, persistence, and safe error handling with mocked MongoDB and Gemini.
+The Dashboard shows document history on the left, analysis in the middle, and a scrollable chat panel on the right on large screens. Reopening a document restores its analysis and saved conversation. Existing upload and analysis features remain available. Tests cover authenticated endpoints, ownership isolation, validation, retrieval, provider failures, persistence, and safe error handling with mocked MongoDB and Gemini.
 
 ## AI document analysis
 

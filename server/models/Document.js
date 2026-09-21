@@ -23,6 +23,7 @@ const analysisSchema = new mongoose.Schema({
 const documentSchema = new mongoose.Schema({
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   originalName: { type: String, required: true },
+  displayName: { type: String, trim: true, minlength: 1, maxlength: 200 },
   fileName: { type: String, required: true },
   mimeType: { type: String, required: true, enum: ['application/pdf'] },
   size: { type: Number, required: true, min: 1, max: 10 * 1024 * 1024 },

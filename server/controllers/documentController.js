@@ -1,4 +1,14 @@
-import { createDocument, analyzeDocument, askDocument, listDocuments, getDocument, getDocumentChat } from '../services/documentService.js'
+import { createDocument, analyzeDocument, askDocument, listDocuments, getDocument, getDocumentChat, deleteDocument, renameDocument } from '../services/documentService.js'
+
+export async function deleteUploadedDocument(req, res) {
+  await deleteDocument(req.params.id, req.user._id)
+  res.status(204).end()
+}
+
+export async function renameUploadedDocument(req, res) {
+  const document = await renameDocument(req.params.id, req.user._id, req.body)
+  res.json({ id: document._id, originalName: document.originalName, displayName: document.displayName })
+}
 
 export async function getUploadedDocumentChat(req, res) {
   res.json(await getDocumentChat(req.params.id, req.user._id))
@@ -9,6 +19,7 @@ export async function getDocumentHistory(req, res) {
   res.json(documents.map(document => ({
     id: document._id,
     originalName: document.originalName,
+    displayName: document.displayName,
     size: document.size,
     createdAt: document.createdAt,
     ...(document.analysis?.documentType ? { analysis: { documentType: document.analysis.documentType } } : {}),
@@ -21,6 +32,7 @@ export async function getUploadedDocument(req, res) {
   res.json({
     id: document._id,
     originalName: document.originalName,
+    displayName: document.displayName,
     size: document.size,
     mimeType: document.mimeType,
     createdAt: document.createdAt,

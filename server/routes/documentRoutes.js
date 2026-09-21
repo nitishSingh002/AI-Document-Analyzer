@@ -1,12 +1,14 @@
 import { Router } from 'express'
 import { authenticate } from '../middleware/authenticate.js'
 import { uploadPdf } from '../middleware/uploadPdf.js'
-import { uploadDocument, analyzeUploadedDocument, askUploadedDocument, getDocumentHistory, getUploadedDocument, getUploadedDocumentChat } from '../controllers/documentController.js'
+import { uploadDocument, analyzeUploadedDocument, askUploadedDocument, getDocumentHistory, getUploadedDocument, getUploadedDocumentChat, deleteUploadedDocument, renameUploadedDocument } from '../controllers/documentController.js'
 
 const router = Router()
 router.use(authenticate)
 router.get('/', getDocumentHistory)
 router.get('/:id', getUploadedDocument)
+router.delete('/:id', deleteUploadedDocument)
+router.patch('/:id', renameUploadedDocument)
 router.get('/:id/chat', getUploadedDocumentChat)
 router.post('/upload', uploadPdf, uploadDocument)
 router.post('/:id/analyze', analyzeUploadedDocument)

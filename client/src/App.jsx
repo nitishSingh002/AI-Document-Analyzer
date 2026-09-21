@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom'
+import { Route, Routes, useLocation } from 'react-router-dom'
 import Navbar from './components/Navbar.jsx'
 import Home from './pages/Home.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -8,10 +8,11 @@ import { useAuth } from './auth/useAuth.js'
 
 function App() {
   const { user } = useAuth()
+  const { pathname } = useLocation()
   return (
     <>
       <Navbar />
-      <main className="container">
+      <main className={`container${pathname === '/dashboard' ? ' dashboard-container' : ''}`}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<AuthPage key="login" mode="login" />} />

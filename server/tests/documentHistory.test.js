@@ -55,7 +55,7 @@ test('list returns only history metadata and requests a limited database project
   assert.equal(status, 200)
   assert.deepEqual(body, [{ id, originalName: stored.originalName, size: stored.size,
     createdAt: stored.createdAt.toISOString(), analysis: { documentType: 'Report' }, analyzed: true }])
-  assert.deepEqual(findMock.mock.calls[0].arguments, [{ owner: ownerId }, 'originalName size createdAt analysis.documentType'])
+  assert.deepEqual(findMock.mock.calls[0].arguments, [{ owner: ownerId }, 'originalName displayName size createdAt analysis.documentType'])
   assert.ok(!JSON.stringify(body).includes(stored.extractedText))
 })
 
