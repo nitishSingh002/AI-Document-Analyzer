@@ -1,4 +1,29 @@
-import { createDocument, analyzeDocument, askDocument } from '../services/documentService.js'
+import { createDocument, analyzeDocument, askDocument, listDocuments, getDocument } from '../services/documentService.js'
+
+export async function getDocumentHistory(req, res) {
+  const documents = await listDocuments()
+  res.json(documents.map(document => ({
+    id: document._id,
+    originalName: document.originalName,
+    size: document.size,
+    createdAt: document.createdAt,
+    ...(document.analysis?.documentType ? { analysis: { documentType: document.analysis.documentType } } : {}),
+    analyzed: Boolean(document.analysis),
+  })))
+}
+
+export async function getUploadedDocument(req, res) {
+  const document = await getDocument(req.params.id)
+  res.json({
+    id: document._id,
+    originalName: document.originalName,
+    size: document.size,
+    mimeType: document.mimeType,
+    createdAt: document.createdAt,
+    extractedText: document.extractedText,
+    analysis: document.analysis ?? null,
+  })
+}
 
 export async function askUploadedDocument(req, res) {
   res.json(await askDocument(req.params.id, req.body?.question))

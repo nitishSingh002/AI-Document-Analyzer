@@ -5,6 +5,27 @@ import { HttpError } from '../utils/HttpError.js'
 import { analyzeText, answerQuestion } from './aiService.js'
 import { retrieveContext } from './retrievalService.js'
 
+export async function listDocuments() {
+  try {
+    return await Document.find({}, 'originalName size createdAt analysis.documentType')
+      .sort({ createdAt: -1, _id: -1 }).lean()
+  } catch (error) {
+    throw new HttpError(503, 'Unable to load document history. Please try again.', { cause: error })
+  }
+}
+
+export async function getDocument(id) {
+  if (typeof id !== 'string' || !/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, 'Invalid document ID.')
+  let document
+  try {
+    document = await Document.findById(id)
+  } catch (error) {
+    throw new HttpError(503, 'Unable to load the document. Please try again.', { cause: error })
+  }
+  if (!document) throw new HttpError(404, 'Document not found.')
+  return document
+}
+
 export async function askDocument(id, question) {
   if (!/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, 'Invalid document ID.')
   if (typeof question !== 'string' || !question.trim()) throw new HttpError(400, 'Question must be a non-empty string.')

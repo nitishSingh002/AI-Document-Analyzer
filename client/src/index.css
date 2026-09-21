@@ -32,6 +32,13 @@ p { color: #536077; line-height: 1.7; max-width: 640px; }
 .dashboard-layout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 24px; margin-top: 28px; }
 .document-analysis { display: grid; gap: 24px; min-width: 0; }
 .dashboard-chat { min-width: 0; }
+.history-list { display: grid; gap: 12px; list-style: none; padding: 4px; max-height: 320px; overflow-y: auto; }
+.history-document { display: grid; gap: 6px; width: 100%; padding: 14px; border: 1px solid #e1e6ee; border-radius: 8px; background: #fff; color: #172033; font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.history-document:hover { background: #f6f8fb; }
+.history-document[aria-pressed="true"] { border-color: #3158c9; background: #eef2ff; }
+.history-document:disabled { cursor: not-allowed; opacity: 0.6; }
+.history-document time, .history-document span { font-size: 0.875rem; color: #536077; }
+.history-document .history-selected { color: #3158c9; font-weight: 600; }
 .dashboard-layout .card { padding: 24px; }
 .upload-area label { display: block; margin-bottom: 12px; font-weight: 600; }
 .upload-area input { display: block; max-width: 100%; font: inherit; }
