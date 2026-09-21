@@ -5,20 +5,20 @@ import { HttpError } from '../utils/HttpError.js'
 import { analyzeText, answerQuestion } from './aiService.js'
 import { retrieveContext } from './retrievalService.js'
 
-export async function listDocuments() {
+export async function listDocuments(owner) {
   try {
-    return await Document.find({}, 'originalName size createdAt analysis.documentType')
+    return await Document.find({ owner }, 'originalName size createdAt analysis.documentType')
       .sort({ createdAt: -1, _id: -1 }).lean()
   } catch (error) {
     throw new HttpError(503, 'Unable to load document history. Please try again.', { cause: error })
   }
 }
 
-export async function getDocument(id) {
+export async function getDocument(id, owner) {
   if (typeof id !== 'string' || !/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, 'Invalid document ID.')
   let document
   try {
-    document = await Document.findById(id)
+    document = await Document.findOne({ _id: id, owner })
   } catch (error) {
     throw new HttpError(503, 'Unable to load the document. Please try again.', { cause: error })
   }
@@ -26,13 +26,13 @@ export async function getDocument(id) {
   return document
 }
 
-export async function askDocument(id, question) {
+export async function askDocument(id, question, owner) {
   if (!/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, 'Invalid document ID.')
   if (typeof question !== 'string' || !question.trim()) throw new HttpError(400, 'Question must be a non-empty string.')
   if (question.length > 2000) throw new HttpError(400, 'Question must be 2000 characters or fewer.')
   let document
   try {
-    document = await Document.findById(id)
+    document = await Document.findOne({ _id: id, owner })
   } catch {
     throw new HttpError(503, 'Unable to load the document. Please try again.')
   }
@@ -51,7 +51,7 @@ export async function askDocument(id, question) {
   try {
     // Append the complete exchange atomically so concurrent requests cannot lose
     // messages or interleave a question with another request's answer.
-    saved = await Document.updateOne({ _id: id }, { $push: { chatHistory: { $each: [
+    saved = await Document.updateOne({ _id: id, owner }, { $push: { chatHistory: { $each: [
       { role: 'user', content: question.trim(), createdAt },
       { role: 'assistant', content: answer, createdAt, sources: result.sources },
     ] } } }, { runValidators: true })
@@ -62,11 +62,11 @@ export async function askDocument(id, question) {
   return result
 }
 
-export async function getDocumentChat(id) {
+export async function getDocumentChat(id, owner) {
   if (typeof id !== 'string' || !/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, 'Invalid document ID.')
   let document
   try {
-    document = await Document.findById(id, 'chatHistory').lean()
+    document = await Document.findOne({ _id: id, owner }, 'chatHistory').lean()
   } catch (error) {
     throw new HttpError(503, 'Unable to load chat history. Please try again.', { cause: error })
   }
@@ -87,11 +87,11 @@ export async function getDocumentChat(id) {
   }))
 }
 
-export async function analyzeDocument(id) {
+export async function analyzeDocument(id, owner) {
   if (!/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, 'Invalid document ID.')
   let document
   try {
-    document = await Document.findById(id)
+    document = await Document.findOne({ _id: id, owner })
   } catch (error) {
     throw new HttpError(503, 'Unable to load the document. Please try again.', { cause: error })
   }
@@ -101,7 +101,7 @@ export async function analyzeDocument(id) {
   const result = await analyzeText(document.extractedText)
   let updated
   try {
-    updated = await Document.findByIdAndUpdate(id, {
+    updated = await Document.findOneAndUpdate({ _id: id, owner }, {
       $set: { analysis: { ...result, analyzedAt: new Date() } },
     }, { returnDocument: 'after', runValidators: true })
   } catch (error) {
@@ -111,7 +111,7 @@ export async function analyzeDocument(id) {
   return updated
 }
 
-export async function createDocument(file) {
+export async function createDocument(file, owner) {
   let parser
   let extractedText
   try {
@@ -133,6 +133,7 @@ export async function createDocument(file) {
 
   try {
     return await Document.create({
+      owner,
       originalName: file.originalname,
       fileName: `${randomUUID()}.pdf`,
       mimeType: file.mimetype,

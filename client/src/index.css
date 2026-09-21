@@ -16,7 +16,14 @@ a:focus-visible { outline: 3px solid #3158c9; outline-offset: 5px; }
 .site-header { background: #fff; border-bottom: 1px solid #e1e6ee; }
 .navigation { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-block: 22px; }
 .brand { color: #172033; font-weight: 700; }
-.nav-links { display: flex; gap: 20px; }
+.nav-links { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+.nav-user { max-width: 180px; overflow-wrap: anywhere; font-weight: 600; }
+.logout-button { border: 1px solid #e1e6ee; border-radius: 6px; padding: 8px 12px; background: #fff; color: #3158c9; cursor: pointer; font: inherit; }
+.logout-button:disabled { opacity: 0.6; cursor: not-allowed; }
+.auth-card { max-width: 480px; margin-inline: auto; }
+.auth-form { display: grid; gap: 16px; }
+.auth-form label { display: grid; gap: 8px; font-weight: 600; }
+.auth-form input { width: 100%; padding: 12px; border: 1px solid #aab4c5; border-radius: 6px; font: inherit; }
 .nav-links a { color: #536077; }
 .nav-links a.active { color: #3158c9; text-decoration: underline; text-underline-offset: 6px; }
 main.container { padding-block: 56px; }

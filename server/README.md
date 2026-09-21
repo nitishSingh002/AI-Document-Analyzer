@@ -1,5 +1,20 @@
 # AI Document Analyzer API
 
+## Authentication and document ownership
+
+Set `JWT_SECRET` in `server/.env` to a randomly generated secret of at least 32 characters. Keep it private; `.env.example` intentionally contains only an empty placeholder. `JWT_EXPIRES_IN` defaults to `7d`. Set `CLIENT_URL=http://localhost:5173` for local development and use that same hostname in your browser. In production, set `NODE_ENV=production`, use HTTPS, and configure `CLIENT_URL` to the frontend origin. The frontend and API must use the same site for the SameSite=Lax cookie (a same-origin reverse proxy is suitable).
+
+- `POST /api/auth/register`: `{ "name": "...", "email": "...", "password": "..." }`.
+- `POST /api/auth/login`: `{ "email": "...", "password": "..." }`.
+- `POST /api/auth/logout`: clears the session cookie.
+- `GET /api/auth/me`: returns `{ "user": { "id", "name", "email", "createdAt" } }`, or 401.
+
+Registration and login return the same public user shape and set an HTTP-only session cookie. JWTs are never returned in JSON or stored in browser storage. Passwords require at least 8 characters, at most 72 UTF-8 bytes, and are hashed with bcrypt at cost 12. Emails are normalized and have a unique MongoDB index. Ensure the User email index is created if automatic index creation is disabled in a deployment.
+
+All document routes require this cookie. Database reads and writes filter by authenticated owner; another user's document and an ownerless document both return 404. Existing development documents are **not assigned automatically**: reupload them after registering. No old documents are deleted by this change. Credentialed CORS uses the configured frontend origin, and mutation requests with a different Origin are rejected.
+
+Cookie options follow the [Express cookie API](https://expressjs.com/en/4x/api/response/#res.cookie). For command-line requests, log in with a cookie jar (`curl -c cookies.txt ...`) and send it with `curl -b cookies.txt ...` on document requests. Do not commit cookie jars.
+
 ## Chat with a document
 
 `POST /api/documents/:id/ask` accepts `{ "question": "What was annual revenue?" }` and returns `{ "answer": "...", "sources": [{ "chunkIndex": 0, "preview": "..." }] }`. Questions must be non-empty strings of at most 2,000 characters. Chunk indexes are zero-based; previews contain at most 300 characters.
@@ -8,9 +23,9 @@ Flow: route -> controller -> document service -> retrieval service -> Gemini AI 
 
 No matching keywords returns HTTP 200 with `This information is not available in the document.` and an empty sources array, without calling Gemini. Keyword retrieval can miss synonyms and paraphrases. For matching context, Gemini is instructed to use only that context and explicitly state when information is unavailable. Responses must pass strict JSON schema validation; this validates format, not factual correctness.
 
-Errors use the existing error envelope: 400 for invalid IDs/questions, 404 for missing documents, 422 for missing extracted text, 503 for database/configuration failures, and 502 for Gemini failures or malformed/incomplete answers. Chat never logs provider errors, question text, or document context. `GEMINI_API_KEY` stays on the server. Chat does not save conversation history or modify the document.
+Errors use the existing error envelope: 400 for invalid IDs/questions, 401 for missing/expired authentication, 404 for missing or inaccessible documents, 422 for missing extracted text, 503 for database/configuration failures, and 502 for Gemini failures or malformed/incomplete answers. Chat never logs provider errors, question text, or document context. `GEMINI_API_KEY` stays on the server. Successful question/answer pairs and source previews are appended atomically to the document's chat history; failed answers are not saved. `GET /api/documents/:id/chat` returns the owner's saved conversation.
 
-The Dashboard shows a question form, pending/error states, the latest answer, and source previews after upload. Selecting or uploading another document resets chat. Existing upload and analysis features remain available. `tests/documentChat.test.js` covers the endpoint, validation, retrieval, unavailable answers, provider failures, malformed outputs, and safe error handling with mocked MongoDB and Gemini.
+The Dashboard shows document history and analysis on the left and a scrollable chat panel on the right. Reopening a document restores its analysis and saved conversation. Existing upload and analysis features remain available. Tests cover authenticated endpoints, ownership isolation, validation, retrieval, provider failures, persistence, and safe error handling with mocked MongoDB and Gemini.
 
 ## AI document analysis
 
@@ -90,7 +105,7 @@ Use Node.js 22.13+ (or a newer compatible supported release) and configure Mongo
 `POST /api/documents/upload` accepts `multipart/form-data` with exactly one file in the `file` field. Both the `.pdf` extension (case-insensitive) and `application/pdf` MIME type are required. Maximum size is 10 × 1024 × 1024 bytes.
 
 ```sh
-curl -F "file=@document.pdf;type=application/pdf" http://localhost:5000/api/documents/upload
+curl -b cookies.txt -F "file=@document.pdf;type=application/pdf" http://localhost:5000/api/documents/upload
 ```
 
 HTTP 201 response:

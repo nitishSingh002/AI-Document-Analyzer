@@ -1,3 +1,4 @@
+import { authenticatedFetch as fetch, ownerId } from '../testSupport/auth.js'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { after, before, test } from 'node:test'
@@ -96,6 +97,7 @@ test('extracts real PDF text, validates model data, and returns a bounded previe
   assert.equal(result.body.createdAt, saved.createdAt.toISOString())
   assert.match(saved.fileName, /^[a-f0-9-]+\.pdf$/)
   assert.equal(saved.mimeType, 'application/pdf')
+  assert.equal(String(saved.owner), ownerId)
   assert.equal(result.body.extractedText, undefined)
 })
 test('returns a safe database error', async (context) => {

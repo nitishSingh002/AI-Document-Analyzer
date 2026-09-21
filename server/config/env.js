@@ -10,6 +10,9 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 
 export const env = {
   port,
+  jwtSecret: process.env.JWT_SECRET?.trim() || '',
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  production: process.env.NODE_ENV === 'production',
   mongodbUri: process.env.MONGODB_URI?.trim() || '',
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
   geminiApiKey: process.env.GEMINI_API_KEY?.trim() || '',

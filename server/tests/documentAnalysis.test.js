@@ -1,3 +1,4 @@
+import { authenticatedFetch as fetch, ownerId } from '../testSupport/auth.js'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { before, after, beforeEach, test } from 'node:test'
@@ -35,9 +36,9 @@ after(async () => {
 })
 beforeEach(context => {
   env.geminiApiKey = 'test-key-never-sent'
-  context.mock.method(Document, 'findById', async () => ({ _id: id, extractedText: 'Saved document text' }))
-  updateMock = context.mock.method(Document, 'findByIdAndUpdate', async (documentId, update) => ({
-    _id: documentId, analysis: update.$set.analysis,
+  context.mock.method(Document, 'findOne', async () => ({ _id: id, extractedText: 'Saved document text' }))
+  updateMock = context.mock.method(Document, 'findOneAndUpdate', async (documentId, update) => ({
+    _id: documentId._id, analysis: update.$set.analysis,
   }))
   parseMock = context.mock.method(Models.prototype, 'generateContentInternal', async () => geminiResponse(result))
 })
@@ -60,21 +61,22 @@ test('analyzes stored text with strict Structured Outputs and saves validated an
   assert.deepEqual(Object.keys(request.config.responseJsonSchema.properties).sort(), Object.keys(result).sort())
   assert.deepEqual(request.config.responseJsonSchema.required.sort(), Object.keys(result).sort())
   assert.deepEqual(updateMock.mock.calls[0].arguments[2], { returnDocument: 'after', runValidators: true })
+  assert.deepEqual(updateMock.mock.calls[0].arguments[0], { _id: id, owner: ownerId })
   assert.equal(response.body.extractedText, undefined)
   assert.ok(!JSON.stringify(response.body).includes(env.geminiApiKey))
 })
 test('invalid ID fails before database or Gemini work', async () => {
   assert.equal((await analyze('invalid')).status, 400)
-  assert.equal(Document.findById.mock.callCount(), 0)
+  assert.equal(Document.findOne.mock.callCount(), 0)
   assert.equal(parseMock.mock.callCount(), 0)
 })
 test('missing document returns 404', async () => {
-  Document.findById.mock.mockImplementation(async () => null)
+  Document.findOne.mock.mockImplementation(async () => null)
   assert.equal((await analyze()).status, 404)
   assert.equal(parseMock.mock.callCount(), 0)
 })
 test('empty text returns 422 without calling Gemini', async () => {
-  Document.findById.mock.mockImplementation(async () => ({ extractedText: '  ' }))
+  Document.findOne.mock.mockImplementation(async () => ({ extractedText: '  ' }))
   assert.equal((await analyze()).status, 422)
   assert.equal(parseMock.mock.callCount(), 0)
 })
@@ -86,7 +88,7 @@ test('missing API key returns a configuration error', async () => {
   assert.equal(parseMock.mock.callCount(), 0)
 })
 test('database read failure is handled', async () => {
-  Document.findById.mock.mockImplementation(async () => { throw new Error('private connection string') })
+  Document.findOne.mock.mockImplementation(async () => { throw new Error('private connection string') })
   const response = await analyze()
   assert.equal(response.status, 503)
   assert.match(response.body.message, /Unable to load/)

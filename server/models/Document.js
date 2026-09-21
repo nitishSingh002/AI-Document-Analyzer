@@ -21,6 +21,7 @@ const analysisSchema = new mongoose.Schema({
 }, { _id: false })
 
 const documentSchema = new mongoose.Schema({
+  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   originalName: { type: String, required: true },
   fileName: { type: String, required: true },
   mimeType: { type: String, required: true, enum: ['application/pdf'] },

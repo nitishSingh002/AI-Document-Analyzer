@@ -1,3 +1,4 @@
+import { authenticatedFetch as fetch, ownerId } from '../testSupport/auth.js'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { before, after, beforeEach, test } from 'node:test'
@@ -21,7 +22,7 @@ after(async () => {
 beforeEach(context => {
   env.geminiApiKey = 'test-key-never-sent'
   stored = { extractedText: 'Annual revenue was 42 million dollars.', chatHistory: [] }
-  context.mock.method(Document, 'findById', (documentId, projection) => projection
+  context.mock.method(Document, 'findOne', (documentId, projection) => projection
     ? { async lean() { return stored } } : Promise.resolve(stored))
   update = context.mock.method(Document, 'updateOne', async (filter, change) => {
     stored.chatHistory.push(...change.$push.chatHistory.$each)
@@ -46,7 +47,7 @@ test('new and legacy documents have empty chat history', async () => {
   assert.deepEqual(await history(), { status: 200, body: [] })
   delete stored.chatHistory
   assert.deepEqual(await history(), { status: 200, body: [] })
-  assert.deepEqual(Document.findById.mock.calls[0].arguments, [id, 'chatHistory'])
+  assert.deepEqual(Document.findOne.mock.calls[0].arguments, [{ _id: id, owner: ownerId }, 'chatHistory'])
 })
 
 test('successful exchange saves both messages atomically with source previews', async () => {
@@ -54,7 +55,7 @@ test('successful exchange saves both messages atomically with source previews', 
   assert.equal(result.status, 200)
   assert.equal(update.mock.callCount(), 1)
   const [filter, change, options] = update.mock.calls[0].arguments
-  assert.deepEqual(filter, { _id: id })
+  assert.deepEqual(filter, { _id: id, owner: ownerId })
   assert.deepEqual(options, { runValidators: true })
   assert.deepEqual(change.$push.chatHistory.$each.map(message => message.role), ['user', 'assistant'])
   const saved = await history()
@@ -85,7 +86,7 @@ test('invalid document ID is rejected before reading the database', async () => 
   for (const invalid of ['invalid', 'g'.repeat(24), 'a'.repeat(12)]) {
     assert.equal((await history(invalid)).status, 400)
   }
-  assert.equal(Document.findById.mock.callCount(), 0)
+  assert.equal(Document.findOne.mock.callCount(), 0)
 })
 
 test('missing document returns 404', async () => {
@@ -123,7 +124,7 @@ test('document removed during answer generation returns 404', async () => {
 })
 
 test('database history read failure returns a safe error', async () => {
-  Document.findById.mock.mockImplementation(() => ({ async lean() { throw new Error('private database details') } }))
+  Document.findOne.mock.mockImplementation(() => ({ async lean() { throw new Error('private database details') } }))
   assert.deepEqual(await history(), { status: 503,
     body: { status: 'error', message: 'Unable to load chat history. Please try again.' } })
 })
@@ -134,7 +135,7 @@ test('model rejects malformed chat roles, content, dates and sources', async () 
     { role: 'assistant', content: 'Hello', createdAt: 'invalid' },
     { role: 'assistant', content: 'Hello', sources: [{ chunkIndex: -1, preview: 'text' }] },
   ]) {
-    const document = new Document({ originalName: 'test.pdf', fileName: 'test.pdf',
+    const document = new Document({ owner: ownerId, originalName: 'test.pdf', fileName: 'test.pdf',
       mimeType: 'application/pdf', size: 10, extractedText: 'Text', chatHistory: [message] })
     await assert.rejects(document.validate(), { name: 'ValidationError' })
   }

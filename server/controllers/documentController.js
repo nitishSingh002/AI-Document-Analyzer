@@ -1,11 +1,11 @@
 import { createDocument, analyzeDocument, askDocument, listDocuments, getDocument, getDocumentChat } from '../services/documentService.js'
 
 export async function getUploadedDocumentChat(req, res) {
-  res.json(await getDocumentChat(req.params.id))
+  res.json(await getDocumentChat(req.params.id, req.user._id))
 }
 
 export async function getDocumentHistory(req, res) {
-  const documents = await listDocuments()
+  const documents = await listDocuments(req.user._id)
   res.json(documents.map(document => ({
     id: document._id,
     originalName: document.originalName,
@@ -17,7 +17,7 @@ export async function getDocumentHistory(req, res) {
 }
 
 export async function getUploadedDocument(req, res) {
-  const document = await getDocument(req.params.id)
+  const document = await getDocument(req.params.id, req.user._id)
   res.json({
     id: document._id,
     originalName: document.originalName,
@@ -30,17 +30,17 @@ export async function getUploadedDocument(req, res) {
 }
 
 export async function askUploadedDocument(req, res) {
-  res.json(await askDocument(req.params.id, req.body?.question))
+  res.json(await askDocument(req.params.id, req.body?.question, req.user._id))
 }
 
 export async function analyzeUploadedDocument(req, res) {
-  const document = await analyzeDocument(req.params.id)
+  const document = await analyzeDocument(req.params.id, req.user._id)
   res.json({ id: document._id, analysis: document.analysis })
 }
 
 export async function uploadDocument(req, res) {
   try {
-    const document = await createDocument(req.file)
+    const document = await createDocument(req.file, req.user._id)
     res.status(201).json({
       id: document._id,
       originalName: document.originalName,

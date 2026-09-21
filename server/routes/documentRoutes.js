@@ -1,8 +1,10 @@
 import { Router } from 'express'
+import { authenticate } from '../middleware/authenticate.js'
 import { uploadPdf } from '../middleware/uploadPdf.js'
 import { uploadDocument, analyzeUploadedDocument, askUploadedDocument, getDocumentHistory, getUploadedDocument, getUploadedDocumentChat } from '../controllers/documentController.js'
 
 const router = Router()
+router.use(authenticate)
 router.get('/', getDocumentHistory)
 router.get('/:id', getUploadedDocument)
 router.get('/:id/chat', getUploadedDocumentChat)

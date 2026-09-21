@@ -1,3 +1,4 @@
+import { authenticatedFetch as fetch, ownerId } from '../testSupport/auth.js'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { before, after, beforeEach, test } from 'node:test'
@@ -41,7 +42,7 @@ beforeEach(context => {
   }
   sortMock = context.mock.method(query, 'sort')
   findMock = context.mock.method(Document, 'find', () => query)
-  context.mock.method(Document, 'findById', async () => stored)
+  context.mock.method(Document, 'findOne', async () => stored)
 })
 
 async function get(path = '') {
@@ -54,7 +55,7 @@ test('list returns only history metadata and requests a limited database project
   assert.equal(status, 200)
   assert.deepEqual(body, [{ id, originalName: stored.originalName, size: stored.size,
     createdAt: stored.createdAt.toISOString(), analysis: { documentType: 'Report' }, analyzed: true }])
-  assert.deepEqual(findMock.mock.calls[0].arguments, [{}, 'originalName size createdAt analysis.documentType'])
+  assert.deepEqual(findMock.mock.calls[0].arguments, [{ owner: ownerId }, 'originalName size createdAt analysis.documentType'])
   assert.ok(!JSON.stringify(body).includes(stored.extractedText))
 })
 
@@ -85,11 +86,11 @@ test('fetches full stored document and analysis without internal fields', async 
   assert.deepEqual(body, JSON.parse(JSON.stringify({ id, originalName: stored.originalName,
     size: stored.size, mimeType: stored.mimeType, createdAt: stored.createdAt,
     extractedText: stored.extractedText, analysis: stored.analysis })))
-  assert.deepEqual(Document.findById.mock.calls[0].arguments, [id])
+  assert.deepEqual(Document.findOne.mock.calls[0].arguments, [{ _id: id, owner: ownerId }])
 })
 
 test('fetching an unanalyzed document returns null analysis', async () => {
-  Document.findById.mock.mockImplementation(async () => ({ ...stored, analysis: undefined }))
+  Document.findOne.mock.mockImplementation(async () => ({ ...stored, analysis: undefined }))
   assert.equal((await get(`/${id}`)).body.analysis, null)
 })
 
@@ -99,11 +100,11 @@ test('invalid IDs are rejected before accessing the database', async () => {
       status: 400, body: { status: 'error', message: 'Invalid document ID.' },
     })
   }
-  assert.equal(Document.findById.mock.callCount(), 0)
+  assert.equal(Document.findOne.mock.callCount(), 0)
 })
 
 test('missing document returns 404', async () => {
-  Document.findById.mock.mockImplementation(async () => null)
+  Document.findOne.mock.mockImplementation(async () => null)
   assert.deepEqual(await get(`/${id}`), {
     status: 404, body: { status: 'error', message: 'Document not found.' },
   })
@@ -117,7 +118,7 @@ test('list database errors return a safe 503 response', async () => {
 })
 
 test('document database errors return a safe 503 response', async () => {
-  Document.findById.mock.mockImplementation(async () => { throw new Error('private database details') })
+  Document.findOne.mock.mockImplementation(async () => { throw new Error('private database details') })
   assert.deepEqual(await get(`/${id}`), {
     status: 503, body: { status: 'error', message: 'Unable to load the document. Please try again.' },
   })

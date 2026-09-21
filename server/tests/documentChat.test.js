@@ -1,3 +1,4 @@
+import { authenticatedFetch as fetch, ownerId } from '../testSupport/auth.js'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { before, after, beforeEach, test } from 'node:test'
@@ -24,7 +25,7 @@ after(async () => {
 })
 beforeEach(context => {
   env.geminiApiKey = 'test-key-never-sent'
-  context.mock.method(Document, 'findById', async () => ({ extractedText: text }))
+  context.mock.method(Document, 'findOne', async () => ({ extractedText: text }))
   context.mock.method(Document, 'updateOne', async () => ({ matchedCount: 1 }))
   gemini = context.mock.method(Models.prototype, 'generateContentInternal', async () => response('Annual revenue was 42 million dollars.'))
 })
@@ -50,11 +51,11 @@ test('successful question uses saved text and returns answer with bounded source
 })
 test('invalid ID fails before database and Gemini', async () => {
   assert.equal((await ask('revenue', 'invalid')).status, 400)
-  assert.equal(Document.findById.mock.callCount(), 0)
+  assert.equal(Document.findOne.mock.callCount(), 0)
   assert.equal(gemini.mock.callCount(), 0)
 })
 test('document not found', async () => {
-  Document.findById.mock.mockImplementation(async () => null)
+  Document.findOne.mock.mockImplementation(async () => null)
   assert.equal((await ask()).status, 404)
   assert.equal(gemini.mock.callCount(), 0)
 })
@@ -65,13 +66,13 @@ for (const [label, question] of [['empty', ''], ['whitespace-only', ' \n\t '], [
       ? await fetch(`${base}/${id}/ask`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
       : await ask(question)
     assert.equal(result.status, 400)
-    assert.equal(Document.findById.mock.callCount(), 0)
+    assert.equal(Document.findOne.mock.callCount(), 0)
     assert.equal(gemini.mock.callCount(), 0)
   })
 }
 test('missing or blank document text', async () => {
   for (const extractedText of [undefined, '', ' \n ']) {
-    Document.findById.mock.mockImplementation(async () => ({ extractedText }))
+    Document.findOne.mock.mockImplementation(async () => ({ extractedText }))
     assert.equal((await ask()).status, 422)
   }
   assert.equal(gemini.mock.callCount(), 0)
@@ -114,7 +115,7 @@ test('malformed, empty, blocked and incomplete answers fail safely', async () =>
 test('database failure and missing server key are handled', async () => {
   env.geminiApiKey = ''
   assert.equal((await ask()).status, 503)
-  Document.findById.mock.mockImplementation(async () => { throw new Error('private database') })
+  Document.findOne.mock.mockImplementation(async () => { throw new Error('private database') })
   const result = await ask()
   assert.equal(result.status, 503)
   assert.ok(!JSON.stringify(result.body).includes('private'))
@@ -137,7 +138,7 @@ test('retrieval ranks normalized keywords, ignores stop words and bounds context
   assert.deepEqual(retrieveContext(document, 'the and is'), [])
 })
 test('only retrieved chunks reach Gemini and previews are at most 300 characters', async () => {
-  Document.findById.mock.mockImplementation(async () => ({ extractedText: `${'unrelated '.repeat(440)} ${'revenue '.repeat(300)}` }))
+  Document.findOne.mock.mockImplementation(async () => ({ extractedText: `${'unrelated '.repeat(440)} ${'revenue '.repeat(300)}` }))
   const result = await ask()
   const payload = JSON.parse(gemini.mock.calls[0].arguments[0].contents[0].parts[0].text)
   assert.ok(payload.context.length <= 4)
