@@ -25,6 +25,7 @@ after(async () => {
 beforeEach(context => {
   env.geminiApiKey = 'test-key-never-sent'
   context.mock.method(Document, 'findById', async () => ({ extractedText: text }))
+  context.mock.method(Document, 'updateOne', async () => ({ matchedCount: 1 }))
   gemini = context.mock.method(Models.prototype, 'generateContentInternal', async () => response('Annual revenue was 42 million dollars.'))
 })
 async function ask(question = 'What was annual revenue?', documentId = id) {
@@ -92,6 +93,7 @@ test('Gemini failure never exposes provider text in responses or logs', async co
   gemini.mock.mockImplementation(async () => { throw new Error(`private ${text} ${env.geminiApiKey}`) })
   const result = await ask()
   assert.equal(result.status, 502)
+  assert.equal(Document.updateOne.mock.callCount(), 0)
   const output = JSON.stringify([result.body, logs.mock.calls])
   for (const secret of ['private', text, env.geminiApiKey]) assert.ok(!output.includes(secret))
 })
@@ -107,6 +109,7 @@ test('malformed, empty, blocked and incomplete answers fail safely', async () =>
     gemini.mock.mockImplementation(async () => value)
     assert.equal((await ask()).status, 502)
   }
+  assert.equal(Document.updateOne.mock.callCount(), 0)
 })
 test('database failure and missing server key are handled', async () => {
   env.geminiApiKey = ''

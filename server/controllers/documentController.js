@@ -1,4 +1,8 @@
-import { createDocument, analyzeDocument, askDocument, listDocuments, getDocument } from '../services/documentService.js'
+import { createDocument, analyzeDocument, askDocument, listDocuments, getDocument, getDocumentChat } from '../services/documentService.js'
+
+export async function getUploadedDocumentChat(req, res) {
+  res.json(await getDocumentChat(req.params.id))
+}
 
 export async function getDocumentHistory(req, res) {
   const documents = await listDocuments()
