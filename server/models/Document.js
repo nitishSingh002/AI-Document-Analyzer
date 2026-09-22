@@ -1,4 +1,11 @@
 import mongoose from 'mongoose'
+import { isValidEmbedding } from '../services/embeddingService.js'
+
+const chunkSchema = new mongoose.Schema({
+  chunkIndex: { type: Number, required: true, min: 0, validate: Number.isInteger },
+  text: { type: String, required: true, trim: true },
+  embedding: { type: [Number], required: true, validate: isValidEmbedding },
+}, { _id: false })
 
 const sourceSchema = new mongoose.Schema({
   chunkIndex: { type: Number, required: true, min: 0, validate: Number.isInteger },
@@ -28,6 +35,8 @@ const documentSchema = new mongoose.Schema({
   mimeType: { type: String, required: true, enum: ['application/pdf'] },
   size: { type: Number, required: true, min: 1, max: 10 * 1024 * 1024 },
   extractedText: { type: String, required: true },
+  chunks: { type: [chunkSchema], default: [] },
+  embeddingModel: { type: String },
   createdAt: { type: Date, default: Date.now, immutable: true },
   analysis: { type: analysisSchema, default: undefined },
   chatHistory: { type: [chatMessageSchema], default: [] },

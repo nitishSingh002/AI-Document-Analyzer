@@ -1,3 +1,4 @@
+import { vector, mockEmbeddings } from '../testSupport/embeddings.js'
 import { authenticatedFetch as fetch, ownerId } from '../testSupport/auth.js'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
@@ -21,7 +22,9 @@ after(async () => {
 })
 beforeEach(context => {
   env.geminiApiKey = 'test-key-never-sent'
-  stored = { extractedText: 'Annual revenue was 42 million dollars.', chatHistory: [] }
+  mockEmbeddings(context)
+  stored = { extractedText: 'Annual revenue was 42 million dollars.', chatHistory: [],
+    chunks: [{ chunkIndex: 0, text: 'Annual revenue was 42 million dollars.', embedding: vector() }] }
   context.mock.method(Document, 'findOne', (documentId, projection) => projection
     ? { async lean() { return stored } } : Promise.resolve(stored))
   update = context.mock.method(Document, 'updateOne', async (filter, change) => {
@@ -76,9 +79,10 @@ test('multiple exchanges preserve chronological question and answer order', asyn
   assert.ok(Date.parse(body[0].createdAt) <= Date.parse(body[2].createdAt))
 })
 
-test('unavailable-context answer is saved without calling Gemini', async () => {
+test('unsupported answer is saved after Gemini evaluates semantic context', async () => {
+  gemini.mock.mockImplementation(async () => ({ text: JSON.stringify({ answer: 'This information is not available in the document.' }), candidates: [{ finishReason: 'STOP' }] }))
   assert.equal((await ask('Describe photosynthesis')).status, 200)
-  assert.equal(gemini.mock.callCount(), 0)
+  assert.equal(gemini.mock.callCount(), 1)
   assert.equal((await history()).body.length, 2)
 })
 

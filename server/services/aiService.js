@@ -14,14 +14,14 @@ const analysisSchema = z.object({
 const answerSchema = z.object({ answer: z.string().trim().min(1).max(12000) }).strict()
 
 // Keep SDK retries disabled so this helper owns the complete attempt budget.
-export async function requestGemini(request) {
+export async function requestGemini(request, operation = 'generateContent') {
   const client = new GoogleGenAI({
     apiKey: env.geminiApiKey,
     vertexai: false,
     httpOptions: { timeout: 90000, retryOptions: { attempts: 1 } },
   })
-  const primary = env.geminiModel
-  const fallback = env.geminiFallbackModel
+  const primary = operation === 'embedContent' ? env.geminiEmbeddingModel : env.geminiModel
+  const fallback = operation === 'embedContent' ? null : env.geminiFallbackModel
   const models = [primary]
   if (fallback && fallback !== primary) models.push(fallback)
   for (const [modelIndex, model] of models.entries()) {
@@ -33,7 +33,7 @@ export async function requestGemini(request) {
         await timers.setTimeout(Math.round(1000 * 2 ** (retryNumber - 1) * (0.8 + Math.random() * 0.4)))
       }
       try {
-        const response = await client.models.generateContent({ ...request, model })
+        const response = await client.models[operation]({ ...request, model })
         console.info('Gemini request:', { model: diagnosticValue(model), retryNumber, status: 200, fallbackUsed })
         return response
       } catch (error) {

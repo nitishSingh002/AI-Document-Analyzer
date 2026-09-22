@@ -4,7 +4,9 @@ import { PDFParse } from 'pdf-parse'
 import Document from '../models/Document.js'
 import { HttpError } from '../utils/HttpError.js'
 import { analyzeText, answerQuestion } from './aiService.js'
-import { retrieveContext } from './retrievalService.js'
+import { retrieveContext, embedDocument, hasEmbeddings } from './retrievalService.js'
+import { generateEmbedding } from './embeddingService.js'
+import { env } from '../config/env.js'
 
 export async function listDocuments(owner) {
   try {
@@ -68,10 +70,22 @@ export async function askDocument(id, question, owner) {
   }
   if (!document) throw new HttpError(404, 'Document not found.')
   if (!document.extractedText?.trim()) throw new HttpError(422, 'This document has no extracted text to answer questions.')
-  const chunks = retrieveContext(document.extractedText, question.trim())
-  const answer = chunks.length
-    ? await answerQuestion(question.trim(), chunks)
-    : 'This information is not available in the document.'
+  let storedChunks = document.chunks
+  if (!hasEmbeddings(storedChunks) || (document.embeddingModel && document.embeddingModel !== env.geminiEmbeddingModel)) {
+    storedChunks = await embedDocument(document.extractedText)
+    let savedEmbeddings
+    try {
+      savedEmbeddings = await Document.updateOne({ _id: id, owner }, {
+        $set: { chunks: storedChunks, embeddingModel: env.geminiEmbeddingModel },
+      }, { runValidators: true })
+    } catch {
+      throw new HttpError(503, 'Unable to save document embeddings. Please try again.')
+    }
+    if (!savedEmbeddings.matchedCount) throw new HttpError(404, 'Document not found.')
+  }
+  const questionEmbedding = await generateEmbedding(question.trim(), 'question')
+  const chunks = retrieveContext(storedChunks, questionEmbedding)
+  const answer = await answerQuestion(question.trim(), chunks)
   const result = {
     answer,
     sources: chunks.map(({ chunkIndex, text }) => ({ chunkIndex, preview: text.slice(0, 300) })),
@@ -161,6 +175,7 @@ export async function createDocument(file, owner) {
     throw new HttpError(422, 'No text could be extracted. Scanned or image-only PDFs require OCR, which is not supported yet.')
   }
 
+  const chunks = await embedDocument(extractedText)
   try {
     return await Document.create({
       owner,
@@ -169,6 +184,8 @@ export async function createDocument(file, owner) {
       mimeType: file.mimetype,
       size: file.size,
       extractedText,
+      chunks,
+      embeddingModel: env.geminiEmbeddingModel,
     })
   } catch (error) {
     throw new HttpError(503, 'Unable to save the document. Check the database connection and try again.', { cause: error })

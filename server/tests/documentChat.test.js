@@ -1,3 +1,4 @@
+import { vector, mockEmbeddings } from '../testSupport/embeddings.js'
 import { authenticatedFetch as fetch, ownerId } from '../testSupport/auth.js'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
@@ -6,7 +7,7 @@ import { Models } from '@google/genai'
 import app from '../app.js'
 import Document from '../models/Document.js'
 import { env } from '../config/env.js'
-import { retrieveContext, splitText } from '../services/retrievalService.js'
+import { splitText } from '../services/retrievalService.js'
 
 const id = '507f1f77bcf86cd799439011'
 const text = 'The annual revenue was 42 million dollars. The company operates in London.'
@@ -25,7 +26,8 @@ after(async () => {
 })
 beforeEach(context => {
   env.geminiApiKey = 'test-key-never-sent'
-  context.mock.method(Document, 'findOne', async () => ({ extractedText: text }))
+  mockEmbeddings(context)
+  context.mock.method(Document, 'findOne', async () => ({ extractedText: text, chunks: [{ chunkIndex: 0, text, embedding: vector() }] }))
   context.mock.method(Document, 'updateOne', async () => ({ matchedCount: 1 }))
   gemini = context.mock.method(Models.prototype, 'generateContentInternal', async () => response('Annual revenue was 42 million dollars.'))
 })
@@ -77,14 +79,13 @@ test('missing or blank document text', async () => {
   }
   assert.equal(gemini.mock.callCount(), 0)
 })
-test('irrelevant and stop-word-only questions return unavailable without Gemini', async () => {
-  for (const question of ['Describe photosynthesis', 'what is it?']) {
-    const result = await ask(question)
-    assert.equal(result.status, 200)
-    assert.deepEqual(result.body, { answer: 'This information is not available in the document.', sources: [] })
+test('questions without keyword overlap still use semantic context', async () => {
+  for (const question of ['Describe earnings', 'what is it?']) {
+    assert.equal((await ask(question)).status, 200)
   }
-  assert.equal(gemini.mock.callCount(), 0)
+  assert.equal(gemini.mock.callCount(), 2)
 })
+
 test('Gemini can report unsupported information despite keyword overlap', async () => {
   gemini.mock.mockImplementation(async () => response('This information is not available in the document.'))
   assert.equal((await ask('What is the projected revenue?')).body.answer, 'This information is not available in the document.')
@@ -129,19 +130,11 @@ test('chunks overlap by 40 words and cover the end without redundant trailing ch
   assert.ok(chunks[2].text.endsWith('word400'))
   assert.deepEqual(splitText('   '), [])
 })
-test('retrieval ranks normalized keywords, ignores stop words and bounds context', () => {
-  const document = `${'filler '.repeat(220)} ${'REVENUE growth '.repeat(500)}`
-  const chunks = retrieveContext(document, 'What is the revenue?')
-  assert.equal(chunks.length, 4)
-  assert.ok(chunks[0].chunkIndex > 0)
-  assert.ok(chunks.every(chunk => chunk.text.split(' ').length <= 220))
-  assert.deepEqual(retrieveContext(document, 'the and is'), [])
-})
 test('only retrieved chunks reach Gemini and previews are at most 300 characters', async () => {
   Document.findOne.mock.mockImplementation(async () => ({ extractedText: `${'unrelated '.repeat(440)} ${'revenue '.repeat(300)}` }))
   const result = await ask()
   const payload = JSON.parse(gemini.mock.calls[0].arguments[0].contents[0].parts[0].text)
   assert.ok(payload.context.length <= 4)
-  assert.ok(payload.context.every(chunk => chunk.chunkIndex > 0))
+  assert.ok(payload.context.every(chunk => !('embedding' in chunk)))
   assert.ok(result.body.sources.every(source => source.preview.length <= 300))
 })

@@ -1,9 +1,22 @@
+import { vector, mockEmbeddings } from '../testSupport/embeddings.js'
 import { authenticatedFetch as fetch, ownerId } from '../testSupport/auth.js'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { after, before, test } from 'node:test'
+import { after, before, beforeEach, afterEach, test } from 'node:test'
 import app from '../app.js'
 import Document from '../models/Document.js'
+import { Models } from '@google/genai'
+import { env } from '../config/env.js'
+
+let originalEnv
+beforeEach(context => {
+  originalEnv = { ...env }
+  env.geminiApiKey = 'test-key-never-sent'
+  env.geminiEmbeddingModel = 'gemini-embedding-2'
+  mockEmbeddings(context)
+})
+
+afterEach(() => Object.assign(env, originalEnv))
 
 // A small, structurally valid PDF with a real cross-reference table.
 function pdf(text = '') {
@@ -99,6 +112,10 @@ test('extracts real PDF text, validates model data, and returns a bounded previe
   assert.equal(saved.mimeType, 'application/pdf')
   assert.equal(String(saved.owner), ownerId)
   assert.equal(result.body.extractedText, undefined)
+  assert.equal(result.body.chunks, undefined)
+  assert.ok(saved.chunks.length > 0)
+  assert.deepEqual([...saved.chunks[0].embedding], vector())
+  assert.equal(saved.embeddingModel, 'gemini-embedding-2')
 })
 test('returns a safe database error', async (context) => {
   context.mock.method(Document, 'create', async () => { throw new Error('private database details') })
@@ -106,4 +123,14 @@ test('returns a safe database error', async (context) => {
   assert.equal(result.status, 503)
   assert.match(result.body.message, /Unable to save/)
   assert.ok(!JSON.stringify(result.body).includes('private database details'))
+})
+
+
+test('embedding failure rejects upload before saving any document', async context => {
+  const create = context.mock.method(Document, 'create', async () => { throw new Error('must not save') })
+  Models.prototype.embedContentInternal.mock.mockImplementation(async () => { throw Object.assign(new Error('private provider data'), { status: 400 }) })
+  const result = await upload(pdf('Extracted document text'))
+  assert.equal(result.status, 502)
+  assert.equal(create.mock.callCount(), 0)
+  assert.ok(!JSON.stringify(result.body).includes('private provider data'))
 })
