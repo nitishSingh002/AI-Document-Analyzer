@@ -22,6 +22,7 @@ export function uploadPdf(req, res, next) {
     if (error instanceof HttpError) return next(error)
     if (error) return next(new HttpError(400, 'Invalid multipart upload.', { cause: error }))
     if (!req.file) return next(new HttpError(400, 'Select a PDF file to upload.'))
+    if (!req.file.size || !req.file.buffer?.length) return next(new HttpError(400, 'PDF file must not be empty.'))
     next()
   })
 }

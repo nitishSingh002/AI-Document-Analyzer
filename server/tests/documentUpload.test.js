@@ -63,6 +63,11 @@ test('rejects missing file', async () => {
   assert.equal(result.status, 400)
   assert.match(result.body.message, /Select a PDF/)
 })
+test('rejects empty PDF files', async () => {
+  const result = await upload(Buffer.alloc(0))
+  assert.equal(result.status, 400)
+  assert.match(result.body.message, /must not be empty/)
+})
 test('validates MIME type and extension independently', async () => {
   assert.equal((await upload(pdf('Text'), 'sample.txt')).status, 415)
   assert.equal((await upload(pdf('Text'), 'sample.pdf', 'text/plain')).status, 415)

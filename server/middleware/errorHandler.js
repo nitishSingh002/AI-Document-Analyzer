@@ -6,9 +6,11 @@ export function errorHandler(error, req, res, next) {
     ? candidate
     : 500
 
-  if (status >= 500) console.error('Request failed:', error.message)
+  if (status >= 500) console.error('Request failed with status', status)
 
-  const message = status >= 500 && !error.expose
+  const message = error.type === 'entity.too.large'
+    ? 'Request body is too large.'
+    : status >= 500 && !error.expose
     ? 'Internal server error'
     : error.type === 'entity.parse.failed'
       ? 'Invalid JSON request body'

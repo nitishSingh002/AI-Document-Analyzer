@@ -1,4 +1,5 @@
 import { createDocument, analyzeDocument, askDocument, listDocuments, getDocument, getDocumentChat, deleteDocument, renameDocument } from '../services/documentService.js'
+import { HttpError } from '../utils/HttpError.js'
 
 export async function deleteUploadedDocument(req, res) {
   await deleteDocument(req.params.id, req.user._id)
@@ -42,6 +43,10 @@ export async function getUploadedDocument(req, res) {
 }
 
 export async function askUploadedDocument(req, res) {
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) ||
+    Object.keys(req.body).some(key => key !== 'question')) {
+    throw new HttpError(400, 'Provide only a question in the request body.')
+  }
   res.json(await askDocument(req.params.id, req.body?.question, req.user._id))
 }
 

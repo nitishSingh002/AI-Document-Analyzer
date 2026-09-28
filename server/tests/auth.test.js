@@ -188,3 +188,28 @@ test('credentialed CORS allows configured frontend and rejects foreign mutation 
   assert.equal(result.headers.get('access-control-allow-credentials'), 'true')
   assert.equal((await request('/auth/logout', { method: 'POST', userId: alice, origin: 'https://untrusted.example' })).status, 403)
 })
+
+test('API responses include security headers and rate limit policy', async () => {
+  const result = await request('/health')
+  assert.equal(result.headers.get('x-content-type-options'), 'nosniff')
+  assert.equal(result.headers.get('x-frame-options'), 'SAMEORIGIN')
+  assert.ok(result.headers.get('ratelimit-policy'))
+})
+
+test('oversized JSON requests return a bounded generic error', async () => {
+  const response = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'a@example.com', password: 'x'.repeat(1024 * 1024) }) })
+  assert.equal(response.status, 413)
+  const body = await response.json()
+  assert.equal(body.message, 'Request body is too large.')
+  assert.ok(!('stack' in body))
+})
+
+test('AI routes use the stricter rate limit policy before authentication', async () => {
+  let response
+  for (let index = 0; index < 30; index++) {
+    response = await fetch(`${base}/documents/${documentId}/ask`, { method: 'POST' })
+  }
+  assert.equal(response.status, 429)
+  assert.match(response.headers.get('ratelimit-policy'), /q=30;/)
+})

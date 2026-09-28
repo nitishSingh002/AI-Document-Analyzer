@@ -2,7 +2,7 @@ import { loginUser, registerUser, publicUser, signSession } from '../services/au
 import { env } from '../config/env.js'
 
 function cookieOptions() {
-  return { httpOnly: true, sameSite: 'lax', secure: env.production, path: '/' }
+  return { httpOnly: true, sameSite: env.cookieSameSite, secure: env.production || env.cookieSameSite === 'none', path: '/' }
 }
 function respondWithSession(res, user, status) {
   const { token, expires } = signSession(user._id)
