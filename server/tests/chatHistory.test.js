@@ -109,8 +109,10 @@ test('malformed stored chat data is rejected', async () => {
 })
 
 test('Gemini failure does not save either message', async () => {
-  gemini.mock.mockImplementation(async () => { throw new Error('private provider error') })
-  assert.equal((await ask()).status, 502)
+  gemini.mock.mockImplementation(async () => { throw Object.assign(new Error('private provider error'), { status: 503 }) })
+  const response = await ask()
+  assert.equal(response.status, 503)
+  assert.match(response.body.message, /temporarily unavailable/)
   assert.equal(update.mock.callCount(), 0)
   assert.deepEqual(stored.chatHistory, [])
 })

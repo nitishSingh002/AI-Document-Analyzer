@@ -1,6 +1,6 @@
 import { env } from '../config/env.js'
 import { HttpError } from '../utils/HttpError.js'
-import { requestGemini } from './aiService.js'
+import { geminiHttpError, requestGemini } from './aiService.js'
 
 export const EMBEDDING_DIMENSIONS = 768
 
@@ -23,8 +23,8 @@ export async function generateEmbedding(text, purpose = 'document') {
         : `title: none | text: ${text.trim()}`,
       config: { outputDimensionality: EMBEDDING_DIMENSIONS },
     }, 'embedContent')
-  } catch {
-    throw new HttpError(502, 'Document embedding failed. Please try again later.')
+  } catch (error) {
+    throw geminiHttpError(error, 'Document embedding')
   }
   const vector = response?.embeddings?.[0]?.values
   if (response?.embeddings?.length !== 1 || !isValidEmbedding(vector)) {

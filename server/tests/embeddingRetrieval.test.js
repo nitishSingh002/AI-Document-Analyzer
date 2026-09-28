@@ -123,7 +123,7 @@ test('transient errors use bounded exponential backoff without answer-model fall
 
 test('exhausted retries stop and do not save chat history', async () => {
   embed.mock.mockImplementation(async () => { throw Object.assign(new Error('private'), { status: 503 }) })
-  await assert.rejects(() => askDocument(id, 'leave?', owner), { status: 502 })
+  await assert.rejects(() => askDocument(id, 'leave?', owner), { status: 503 })
   assert.equal(embed.mock.callCount(), 4)
   assert.equal(writes.mock.callCount(), 0)
   assert.equal(answer.mock.callCount(), 0)
@@ -163,7 +163,7 @@ test('lazy embedding database failure prevents answering and chat writes', async
 test('question embedding failure does not save chat history', async () => {
   stored.chunks = [{ chunkIndex: 0, text: stored.extractedText, embedding: vector() }]
   embed.mock.mockImplementation(async () => { throw new Error('private') })
-  await assert.rejects(() => askDocument(id, 'leave?', owner), { status: 502 })
+  await assert.rejects(() => askDocument(id, 'leave?', owner), { status: 503 })
   assert.equal(writes.mock.callCount(), 0)
   assert.equal(answer.mock.callCount(), 0)
 })

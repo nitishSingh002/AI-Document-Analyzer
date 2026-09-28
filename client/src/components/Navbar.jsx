@@ -25,7 +25,7 @@ export default function Navbar() {
           <NavLink to="/dashboard">Dashboard</NavLink>
           {!loading && (user ? <>
             <span className="nav-user" title={user.email}>{user.name}</span>
-            <button className="logout-button" type="button" onClick={handleLogout} disabled={loggingOut}>{loggingOut ? 'Logging out...' : 'Logout'}</button>
+            <button className="logout-button" type="button" onClick={handleLogout} disabled={loggingOut}>{loggingOut && <span className="spinner" aria-hidden="true" />}{loggingOut ? 'Logging out…' : 'Logout'}</button>
           </> : <><NavLink to="/login">Login</NavLink><NavLink to="/register">Register</NavLink></>)}
           {error && <span className="upload-error" role="alert">{error}</span>}
         </div>

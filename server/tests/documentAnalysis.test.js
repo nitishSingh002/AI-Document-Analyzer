@@ -58,6 +58,9 @@ test('analyzes stored text with strict Structured Outputs and saves validated an
   assert.equal(request.model, env.geminiModel)
   assert.equal(request.config.responseMimeType, 'application/json')
   assert.equal(request.config.responseJsonSchema.additionalProperties, false)
+  assert.equal(request.config.responseJsonSchema.$schema, undefined)
+  assert.equal(request.config.responseJsonSchema.properties.summary.minLength, undefined)
+  assert.equal(request.config.responseJsonSchema.properties.keyPoints.items.minLength, undefined)
   assert.deepEqual(Object.keys(request.config.responseJsonSchema.properties).sort(), Object.keys(result).sort())
   assert.deepEqual(request.config.responseJsonSchema.required.sort(), Object.keys(result).sort())
   assert.deepEqual(updateMock.mock.calls[0].arguments[2], { returnDocument: 'after', runValidators: true })
@@ -95,9 +98,10 @@ test('database read failure is handled', async () => {
   assert.equal(parseMock.mock.callCount(), 0)
 })
 test('Gemini API failures do not leak details or save analysis', async () => {
-  parseMock.mock.mockImplementation(async () => { throw new Error('private API credentials') })
+  parseMock.mock.mockImplementation(async () => { throw Object.assign(new Error('private API credentials'), { statusCode: 503 }) })
   const response = await analyze()
-  assert.equal(response.status, 502)
+  assert.equal(response.status, 503)
+  assert.match(response.body.message, /temporarily unavailable \(Gemini HTTP 503\)/)
   assert.ok(!JSON.stringify(response.body).includes('private'))
   assert.equal(updateMock.mock.callCount(), 0)
 })
@@ -111,10 +115,10 @@ test('Gemini diagnostics include useful fields, redact keys, and keep the fronte
   })
   parseMock.mock.mockImplementation(async () => { throw providerError })
   const response = await analyze()
-  assert.deepEqual(response.body, { status: 'error', message: 'AI analysis failed. Please try again later.' })
+  assert.deepEqual(response.body, { status: 'error', message: 'AI analysis could not be completed because Gemini rejected the request (HTTP 401).' })
   assert.equal(response.status, 502)
   const diagnostic = info.mock.calls.find(call => call.arguments[0] === 'Gemini request:').arguments[1]
-  assert.deepEqual(diagnostic, { model: env.geminiModel, retryNumber: 0, status: 401, fallbackUsed: false })
+  assert.deepEqual(diagnostic, { model: env.geminiModel, retryNumber: 0, status: 401, fallbackUsed: false, providerMessage: 'Gemini request rejected (HTTP 401)' })
   assert.equal(parseMock.mock.callCount(), 1)
   const serialized = JSON.stringify([...logs.mock.calls, ...info.mock.calls].map(call => call.arguments))
   for (const secret of [env.geminiApiKey, 'AIza-partial', 'another-secret', 'header-secret', 'Incorrect API key']) {
@@ -143,6 +147,16 @@ test('refused, incomplete, missing, and malformed outputs are never saved', asyn
     geminiResponse({ ...result, keyPoints: [] }),
   ]) {
     parseMock.mock.mockImplementation(async () => output)
+    assert.equal((await analyze()).status, 502)
+  }
+  assert.equal(updateMock.mock.callCount(), 0)
+})
+test('sanitized Gemini schema does not weaken Zod validation of analysis responses', async () => {
+  for (const invalid of [
+    { ...result, summary: '' },
+    { ...result, keyPoints: ['', 'Two', 'Three', 'Four', 'Five'] },
+  ]) {
+    parseMock.mock.mockImplementation(async () => geminiResponse(invalid))
     assert.equal((await analyze()).status, 502)
   }
   assert.equal(updateMock.mock.callCount(), 0)

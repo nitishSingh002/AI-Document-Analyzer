@@ -50,6 +50,9 @@ test('successful question uses saved text and returns answer with bounded source
   assert.match(request.config.systemInstruction, /not available in the document/)
   assert.equal(request.config.responseMimeType, 'application/json')
   assert.equal(request.config.responseJsonSchema.additionalProperties, false)
+  assert.equal(request.config.responseJsonSchema.$schema, undefined)
+  assert.equal(request.config.responseJsonSchema.properties.answer.minLength, undefined)
+  assert.equal(request.config.responseJsonSchema.properties.answer.maxLength, undefined)
 })
 test('invalid ID fails before database and Gemini', async () => {
   assert.equal((await ask('revenue', 'invalid')).status, 400)
@@ -94,12 +97,13 @@ test('Gemini failure never exposes provider text in responses or logs', async co
   const logs = context.mock.method(console, 'error', () => {})
   gemini.mock.mockImplementation(async () => { throw new Error(`private ${text} ${env.geminiApiKey}`) })
   const result = await ask()
-  assert.equal(result.status, 502)
+  assert.equal(result.status, 503)
+  assert.match(result.body.message, /could not reach Gemini/)
   assert.equal(Document.updateOne.mock.callCount(), 0)
   const output = JSON.stringify([result.body, logs.mock.calls])
   for (const secret of ['private', text, env.geminiApiKey]) assert.ok(!output.includes(secret))
 })
-test('malformed, empty, blocked and incomplete answers fail safely', async () => {
+test('Zod validation rejects malformed, empty, blocked and incomplete answers', async () => {
   for (const value of [
     response(''), response('  '), response(42), response('x'.repeat(12001)),
     { text: '{broken', candidates: [{ finishReason: 'STOP' }] },

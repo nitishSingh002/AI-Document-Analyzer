@@ -22,7 +22,7 @@ export default function AuthPage({ mode }) {
       setError(requestError.response?.data?.message || 'Unable to connect. Please try again.')
     } finally { setLoading(false) }
   }
-  if (checking) return <p role="status">Checking your session...</p>
+  if (checking) return <section className="card auth-card auth-loading" role="status"><span className="spinner" aria-hidden="true" />Checking your session…</section>
   if (user) return <Navigate to="/dashboard" replace />
   if (sessionError) return <section className="card"><p role="alert">{sessionError}</p><button className="button" onClick={retry}>Retry</button></section>
   return <section className="card auth-card">
@@ -33,7 +33,7 @@ export default function AuthPage({ mode }) {
       <label>Password<input name="password" type="password" autoComplete={register ? 'new-password' : 'current-password'} required minLength={8} maxLength={72} disabled={loading} aria-describedby={register ? 'password-help' : undefined} /></label>
       {register && <small id="password-help">Use at least 8 characters, up to 72 UTF-8 bytes.</small>}
       {error && <p className="upload-error" role="alert">{error}</p>}
-      <button className="button" type="submit" disabled={loading}>{loading ? 'Please wait...' : register ? 'Register' : 'Log in'}</button>
+      <button className="button primary" type="submit" disabled={loading}>{loading && <span className="spinner" aria-hidden="true" />}{loading ? 'Please wait…' : register ? 'Register' : 'Log in'}</button>
     </form>
     <p>{register ? 'Already have an account? ' : 'Need an account? '}<Link to={register ? '/login' : '/register'}>{register ? 'Log in' : 'Register'}</Link></p>
   </section>

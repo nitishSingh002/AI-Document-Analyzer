@@ -66,7 +66,7 @@ function DocumentConversation({ documentId }) {
     <section className="card document-chat" aria-labelledby="chat-title">
       <h2 id="chat-title">Chat with Document</h2>
       <p>Ask one question at a time. Answers use relevant passages from this document.</p>
-      {historyLoading && <p role="status">Loading chat history...</p>}
+      {historyLoading && <p className="inline-status" role="status"><span className="spinner" aria-hidden="true" /> Loading chat history…</p>}
       {historyError && <div>
         <p className="upload-error" role="alert">{historyError}</p>
         <button className="button" type="button" onClick={reloadHistory}>Retry history</button>
@@ -88,7 +88,7 @@ function DocumentConversation({ documentId }) {
           <strong>You · Sending</strong>
           <p className="chat-answer">{pendingQuestion}</p>
         </article>}
-        {loading && <p role="status">Finding relevant context and preparing an answer...</p>}
+        {loading && <p className="inline-status chat-loading" role="status"><span className="spinner" aria-hidden="true" /> Finding relevant context and preparing an answer…</p>}
       </div>
       {error && <div>
         <p className="upload-error" role="alert">{error}</p>
@@ -99,7 +99,7 @@ function DocumentConversation({ documentId }) {
         <textarea id="document-question" value={question} onChange={event => setQuestion(event.target.value)}
           maxLength={2000} rows={3} required disabled={loading || historyLoading || Boolean(historyError)} aria-describedby="question-limit" />
         <small id="question-limit">{question.length}/2000 characters</small>
-        <div><button className="button" disabled={loading || historyLoading || Boolean(historyError) || !question.trim()}>{loading ? 'Asking...' : 'Ask'}</button></div>
+        <div><button className="button primary" disabled={loading || historyLoading || Boolean(historyError) || !question.trim()}>{loading && <span className="spinner" aria-hidden="true" />}{loading ? 'Asking…' : 'Ask'}</button></div>
       </form>
     </section>
   )
