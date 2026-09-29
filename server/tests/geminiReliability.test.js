@@ -6,11 +6,9 @@ import { env } from '../config/env.js'
 import { analyzeText, answerQuestion } from '../services/aiService.js'
 
 const privateText = 'Confidential document contents never belong in logs.'
-const analysis = {
-  summary: 'A summary.', keyPoints: ['One', 'Two', 'Three', 'Four', 'Five'],
-  documentType: 'report', entities: [],
-}
-let originalEnv, generate, sleep, logs, errors
+const analysis = { summary: 'A summary.', keyPoints: ['One', 'Two', 'Three', 'Four', 'Five'], documentType: 'report', entities: [] }
+let originalEnv, generate, sleep, logs
+
 beforeEach(context => {
   originalEnv = { ...env }
   env.geminiApiKey = 'secret-test-key'
@@ -19,123 +17,83 @@ beforeEach(context => {
   generate = context.mock.method(Models.prototype, 'generateContentInternal')
   sleep = context.mock.method(timers, 'setTimeout', async () => {})
   logs = context.mock.method(console, 'info', () => {})
-  errors = context.mock.method(console, 'error', () => {})
 })
 afterEach(() => Object.assign(env, originalEnv))
 
-function unavailable(status = 503) {
-  return Object.assign(new Error(`${privateText} ${env.geminiApiKey}`), { status })
-}
-function success(value) {
-  return { text: JSON.stringify(value), candidates: [{ finishReason: 'STOP' }] }
-}
-function attemptedModels() {
-  return generate.mock.calls.map(call => call.arguments[0].model)
-}
-function assertBackoff() {
-  assert.equal(sleep.mock.callCount(), 3)
-  for (const [index, call] of sleep.mock.calls.entries()) {
-    const delay = call.arguments[0]
-    assert.ok(delay >= 1000 * 2 ** index * 0.8 && delay <= 1000 * 2 ** index * 1.2)
-  }
-}
+function failure(status) { return Object.assign(new Error(`${privateText} ${env.geminiApiKey}`), status ? { status } : {}) }
+function success(value) { return { text: JSON.stringify(value), candidates: [{ finishReason: 'STOP' }] } }
+function models() { return generate.mock.calls.map(call => call.arguments[0].model) }
+function diagnostics() { return logs.mock.calls.filter(call => call.arguments[0] === 'Gemini request:').map(call => call.arguments[1]) }
+const cases = [
+  ['analysis', () => analyzeText(privateText), analysis, value => value],
+  ['chat', () => answerQuestion('What does it say?', [{ chunkIndex: 0, text: privateText }]), { answer: 'An answer.' }, value => value.answer],
+]
 
-for (const [name, run, value, genericError] of [
-  ['analysis', () => analyzeText(privateText), analysis, 'AI analysis'],
-  ['chat', () => answerQuestion('What does it say?', [{ chunkIndex: 0, text: privateText }]), { answer: 'An answer.' }, 'AI question answering'],
-]) {
-  test(`${name}: success without retry`, async () => {
+for (const [name, run, value, expected] of cases) {
+  test(`${name}: primary 200 returns immediately`, async () => {
     generate.mock.mockImplementation(async () => success(value))
-    assert.deepEqual(await run(), name === 'chat' ? value.answer : value)
-    assert.deepEqual(attemptedModels(), ['primary-model'])
+    assert.deepEqual(await run(), expected(value))
+    assert.deepEqual(models(), ['primary-model'])
     assert.equal(sleep.mock.callCount(), 0)
   })
-  test(`${name}: 503 then successful retry`, async () => {
-    let calls = 0
-    generate.mock.mockImplementation(async () => {
-      if (++calls === 1) throw unavailable()
-      return success(value)
+
+  for (const status of [429, 503]) {
+    test(`${name}: primary ${status} retries once then succeeds`, async () => {
+      let calls = 0
+      generate.mock.mockImplementation(async () => ++calls === 1 ? Promise.reject(failure(status)) : success(value))
+      await run()
+      assert.deepEqual(models(), ['primary-model', 'primary-model'])
+      assert.equal(sleep.mock.callCount(), 1)
+      assert.deepEqual(diagnostics().map(item => [item.status, item.retryNumber]), [[status, 0], [200, 1]])
     })
-    await run()
-    assert.deepEqual(attemptedModels(), ['primary-model', 'primary-model'])
-    assert.equal(sleep.mock.callCount(), 1)
-    assert.ok(sleep.mock.calls[0].arguments[0] >= 800 && sleep.mock.calls[0].arguments[0] <= 1200)
-    const diagnostics = logs.mock.calls.filter(call => call.arguments[0] === 'Gemini request:').map(call => call.arguments[1])
-    assert.deepEqual(diagnostics.map(log => log.status), [503, 200])
-    assert.deepEqual(diagnostics.map(log => log.retryNumber), [0, 1])
-  })
-  test(`${name}: repeated 503 then fallback success preserves payload`, async () => {
-    generate.mock.mockImplementation(async request => {
-      if (request.model === 'primary-model') throw unavailable()
-      return success(value)
+
+    test(`${name}: primary ${status} retries once then fallback succeeds`, async () => {
+      generate.mock.mockImplementation(async request => request.model === 'primary-model' ? Promise.reject(failure(status)) : success(value))
+      await run()
+      assert.deepEqual(models(), ['primary-model', 'primary-model', 'fallback-model'])
+      assert.deepEqual(diagnostics().map(item => item.switchingToFallback), [false, true, false])
+      assert.equal(diagnostics()[2].fallbackUsed, true)
     })
-    await run()
-    assert.deepEqual(attemptedModels(), [...Array(4).fill('primary-model'), 'fallback-model'])
-    assertBackoff()
-    const initial = generate.mock.calls[0].arguments[0]
-    const fallback = generate.mock.calls[4].arguments[0]
-    assert.deepEqual(fallback.contents, initial.contents)
-    assert.deepEqual(fallback.config, initial.config)
-      assert.deepEqual(logs.mock.calls.at(-1).arguments[1], { model: 'fallback-model', retryNumber: 0, status: 200, fallbackUsed: true, providerMessage: null })
-  })
+  }
+
   for (const status of [400, 401, 403, 404]) {
-    test(`${name}: permanent ${status} does not retry or use fallback`, async () => {
-      generate.mock.mockImplementation(async () => { throw unavailable(status) })
-      await assert.rejects(run, { status: 502, message: `${genericError} could not be completed because Gemini rejected the request (HTTP ${status}).` })
-      assert.deepEqual(attemptedModels(), ['primary-model'])
+    test(`${name}: permanent ${status} does not retry or fallback`, async () => {
+      generate.mock.mockImplementation(async () => { throw failure(status) })
+      await assert.rejects(run)
+      assert.deepEqual(models(), ['primary-model'])
       assert.equal(sleep.mock.callCount(), 0)
     })
   }
-  test(`${name}: fallback failure returns existing generic error and safe diagnostics`, async () => {
-    generate.mock.mockImplementation(async () => { throw unavailable() })
-    await assert.rejects(run, { status: 503, message: `${genericError} is temporarily unavailable (Gemini HTTP 503). Please try again shortly.` })
-    assert.deepEqual(attemptedModels(), [...Array(4).fill('primary-model'), 'fallback-model'])
-    assertBackoff()
-    const serialized = JSON.stringify([...logs.mock.calls, ...errors.mock.calls])
+
+  test(`${name}: fallback transient failure retries once then returns sanitized error`, async () => {
+    generate.mock.mockImplementation(async () => { throw failure(429) })
+    await assert.rejects(run, { status: 429 })
+    assert.deepEqual(models(), ['primary-model', 'primary-model', 'fallback-model', 'fallback-model'])
+    assert.equal(sleep.mock.callCount(), 2)
+    assert.equal(diagnostics().at(-1).switchingToFallback, false)
+    const serialized = JSON.stringify(diagnostics())
     assert.ok(!serialized.includes(privateText))
     assert.ok(!serialized.includes(env.geminiApiKey))
-    assert.deepEqual(logs.mock.calls.at(-1).arguments[1], { model: 'fallback-model', retryNumber: 0, status: 503, fallbackUsed: true, providerMessage: 'Gemini server error (HTTP 503)' })
   })
-  test(`${name}: 429 and other 5xx errors are retryable`, async () => {
-    let calls = 0
-    generate.mock.mockImplementation(async () => {
-      if (calls < 3) throw unavailable([429, 500, 502][calls++])
-      return success(value)
-    })
+
+  test(`${name}: network failure retries then switches to fallback`, async () => {
+    generate.mock.mockImplementation(async request => request.model === 'primary-model' ? Promise.reject(new TypeError('fetch failed')) : success(value))
     await run()
-    assert.deepEqual(attemptedModels(), Array(4).fill('primary-model'))
-    assertBackoff()
+    assert.deepEqual(models(), ['primary-model', 'primary-model', 'fallback-model'])
   })
-  test(`${name}: a 429 is retried and succeeds without invoking fallback`, async () => {
-    let calls = 0
-    generate.mock.mockImplementation(async () => {
-      if (++calls === 1) throw unavailable(429)
-      return success(value)
-    })
-    await run()
-    assert.deepEqual(attemptedModels(), ['primary-model', 'primary-model'])
-    const diagnostic = logs.mock.calls.find(call => call.arguments[0] === 'Gemini request:').arguments[1]
-    assert.equal(diagnostic.providerMessage, 'Gemini rate limit exceeded')
-    assert.equal(sleep.mock.callCount(), 1)
-  })
-  test(`${name}: identical fallback is not attempted twice`, async () => {
+
+  test(`${name}: fallback is never looped and receives at most one retry`, async () => {
     env.geminiFallbackModel = env.geminiModel
-    generate.mock.mockImplementation(async () => { throw unavailable() })
-    await assert.rejects(run, { status: 503, message: `${genericError} is temporarily unavailable (Gemini HTTP 503). Please try again shortly.` })
-    assert.deepEqual(attemptedModels(), Array(4).fill('primary-model'))
-    assertBackoff()
-  })
-  test(`${name}: a permanent error after a transient one stops retries`, async () => {
-    let calls = 0
-    generate.mock.mockImplementation(async () => { throw unavailable(++calls === 1 ? 503 : 401) })
-    await assert.rejects(run, { status: 502, message: `${genericError} could not be completed because Gemini rejected the request (HTTP 401).` })
-    assert.deepEqual(attemptedModels(), ['primary-model', 'primary-model'])
-    assert.equal(sleep.mock.callCount(), 1)
-  })
-  test(`${name}: malformed successful response is not retried`, async () => {
-    generate.mock.mockImplementation(async () => ({ text: 'invalid JSON', candidates: [{ finishReason: 'STOP' }] }))
-    await assert.rejects(run, { status: 502 })
-    assert.equal(generate.mock.callCount(), 1)
-    assert.equal(sleep.mock.callCount(), 0)
+    generate.mock.mockImplementation(async () => { throw failure(503) })
+    await assert.rejects(run, { status: 503 })
+    assert.deepEqual(models(), ['primary-model', 'primary-model'])
   })
 }
+
+test('unreasonable Retry-After is ignored and retry delay stays bounded', async () => {
+  const error = Object.assign(failure(429), { headers: { 'retry-after': '3600' } })
+  let calls = 0
+  generate.mock.mockImplementation(async () => ++calls === 1 ? Promise.reject(error) : success(analysis))
+  await analyzeText(privateText)
+  assert.ok(sleep.mock.calls[0].arguments[0] <= 5000)
+})

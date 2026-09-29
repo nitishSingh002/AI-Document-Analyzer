@@ -107,24 +107,23 @@ for (const status of [400, 401, 403]) {
   })
 }
 
-test('transient errors use bounded exponential backoff without answer-model fallback', async () => {
+test('transient embedding error retries once with bounded delay and no answer-model fallback', async () => {
   let attempts = 0
   embed.mock.mockImplementation(async () => {
-    if (attempts < 3) throw Object.assign(new Error('private'), { status: [429, 500, 503][attempts++] })
+    if (attempts++ === 0) throw Object.assign(new Error('private'), { status: 429 })
     return { embeddings: [{ values: vector() }] }
   })
   await generateEmbedding('text')
-  assert.equal(embed.mock.callCount(), 4)
-  for (const [i, call] of sleep.mock.calls.entries()) {
-    assert.ok(call.arguments[0] >= 800 * 2 ** i && call.arguments[0] <= 1200 * 2 ** i)
-  }
+  assert.equal(embed.mock.callCount(), 2)
+  assert.equal(sleep.mock.callCount(), 1)
+  assert.ok(sleep.mock.calls[0].arguments[0] >= 200 && sleep.mock.calls[0].arguments[0] <= 300)
   assert.ok(embed.mock.calls.every(call => call.arguments[0].model === 'gemini-embedding-2'))
 })
 
 test('exhausted retries stop and do not save chat history', async () => {
   embed.mock.mockImplementation(async () => { throw Object.assign(new Error('private'), { status: 503 }) })
   await assert.rejects(() => askDocument(id, 'leave?', owner), { status: 503 })
-  assert.equal(embed.mock.callCount(), 4)
+  assert.equal(embed.mock.callCount(), 2)
   assert.equal(writes.mock.callCount(), 0)
   assert.equal(answer.mock.callCount(), 0)
 })

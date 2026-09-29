@@ -118,7 +118,7 @@ test('Gemini diagnostics include useful fields, redact keys, and keep the fronte
   assert.deepEqual(response.body, { status: 'error', message: 'AI analysis could not be completed because Gemini rejected the request (HTTP 401).' })
   assert.equal(response.status, 502)
   const diagnostic = info.mock.calls.find(call => call.arguments[0] === 'Gemini request:').arguments[1]
-  assert.deepEqual(diagnostic, { model: env.geminiModel, retryNumber: 0, status: 401, fallbackUsed: false, providerMessage: 'Gemini request rejected (HTTP 401)' })
+  assert.deepEqual(diagnostic, { model: env.geminiModel, retryNumber: 0, status: 401, fallbackUsed: false, providerMessage: 'Gemini request rejected (HTTP 401)', switchingToFallback: false })
   assert.equal(parseMock.mock.callCount(), 1)
   const serialized = JSON.stringify([...logs.mock.calls, ...info.mock.calls].map(call => call.arguments))
   for (const secret of [env.geminiApiKey, 'AIza-partial', 'another-secret', 'header-secret', 'Incorrect API key']) {

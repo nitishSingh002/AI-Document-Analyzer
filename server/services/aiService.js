@@ -37,6 +37,31 @@ function providerStatus(error) {
   return Number.isInteger(status) && status >= 100 && status <= 599 ? status : null
 }
 
+function retryAfterMs(error) {
+  const value = error?.headers?.get?.('retry-after') ?? error?.headers?.['retry-after'] ??
+    error?.response?.headers?.get?.('retry-after') ?? error?.response?.headers?.['retry-after']
+  if (value == null) return null
+  const seconds = Number(value)
+  const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now()
+  // Provider supplied waits are honored only up to five seconds.
+  return Number.isFinite(delay) && delay >= 0 && delay <= 5000 ? delay : null
+}
+
+function retryDelay(error, status) {
+  const providerDelay = retryAfterMs(error)
+  if (providerDelay !== null) return providerDelay
+  const base = status === 429 ? 250 : 1000
+  const jitter = 0.8 + Math.random() * 0.4
+  return Math.min(5000, Math.round(base * jitter))
+}
+
+function isNetworkFailure(error) {
+  if (error?.name === 'AbortError' || error?.name === 'TimeoutError' || error?.name === 'TypeError') return true
+  const code = error?.code ?? error?.cause?.code
+  if (typeof code === 'string' && /^(?:ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|UND_ERR_CONNECT_TIMEOUT|UND_ERR_HEADERS_TIMEOUT|UND_ERR_SOCKET)$/i.test(code)) return true
+  return /\b(?:network|fetch failed|timed? ?out|timeout|socket|connection reset|connection refused)\b/i.test(error?.message || '')
+}
+
 function safeProviderMessage(status) {
   if (status === 429) return 'Gemini rate limit exceeded'
   if (status >= 500 && status <= 599) return `Gemini server error (HTTP ${status})`
@@ -66,30 +91,29 @@ export async function requestGemini(request, operation = 'generateContent') {
   })
   const primary = operation === 'embedContent' ? env.geminiEmbeddingModel : env.geminiModel
   const fallback = operation === 'embedContent' ? null : env.geminiFallbackModel
-  const models = [primary]
-  if (fallback && fallback !== primary) models.push(fallback)
-  for (const [modelIndex, model] of models.entries()) {
-    const fallbackUsed = modelIndex > 0
-    // Three primary retries, then one fallback attempt; no nested retry loop.
-    const retryLimit = fallbackUsed ? 0 : 3
-    for (let retryNumber = 0; retryNumber <= retryLimit; retryNumber++) {
-      if (retryNumber > 0) {
-        await timers.setTimeout(Math.round(1000 * 2 ** (retryNumber - 1) * (0.8 + Math.random() * 0.4)))
-      }
+  const canFallback = fallback && fallback !== primary
+  const models = [{ model: primary, fallbackUsed: false }]
+  if (canFallback) models.push({ model: fallback, fallbackUsed: true })
+  for (const { model, fallbackUsed } of models) {
+    for (let retryNumber = 0; retryNumber <= 1; retryNumber++) {
       try {
         const response = await client.models[operation]({ ...request, model })
-        console.info('Gemini request:', { model: diagnosticValue(model), retryNumber, status: 200, fallbackUsed, providerMessage: null })
+        console.info('Gemini request:', { model: diagnosticValue(model), retryNumber, status: 200, fallbackUsed, providerMessage: null, switchingToFallback: false })
         return response
       } catch (error) {
         const status = providerStatus(error)
+        const safeMessage = safeProviderMessage(status)
+        const transient = !(error instanceof SyntaxError || error instanceof z.ZodError) &&
+          (status === 429 || (status >= 500 && status <= 599) || (status === null && isNetworkFailure(error)))
+        const retrying = transient && retryNumber === 0
+        const switchingToFallback = transient && retryNumber === 1 && !fallbackUsed && Boolean(canFallback)
         console.info('Gemini request:', {
           model: diagnosticValue(model), retryNumber, status, fallbackUsed,
-          providerMessage: safeProviderMessage(status),
+          providerMessage: safeMessage, switchingToFallback,
         })
-        const transient = !(error instanceof SyntaxError || error instanceof z.ZodError) &&
-          (status === 429 || (status >= 500 && status <= 599))
         if (!transient) throw error
-        if (retryNumber === retryLimit && modelIndex === models.length - 1) throw error
+        if (!retrying && !switchingToFallback) throw error
+        if (retrying) await timers.setTimeout(retryDelay(error, status))
       }
     }
   }
